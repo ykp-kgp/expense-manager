@@ -1,7 +1,10 @@
 import * as Crypto from 'expo-crypto';
 import CryptoJS from 'crypto-js';
 
-const PBKDF2_ITERATIONS = 120_000;
+/** PIN unlock hash — tuned for mobile (4–6 digit PIN + salt). */
+const PIN_HASH_ITERATIONS = 15_000;
+/** Backup encryption key — stronger iteration count. */
+const BACKUP_KEY_ITERATIONS = 120_000;
 const KEY_BYTES = 32;
 
 export async function generateSalt(byteLength = 16): Promise<string> {
@@ -18,7 +21,7 @@ export function bytesToHex(bytes: Uint8Array): string {
 export function hashPin(pin: string, salt: string): string {
   const wordArray = CryptoJS.PBKDF2(pin, CryptoJS.enc.Hex.parse(salt), {
     keySize: KEY_BYTES / 4,
-    iterations: PBKDF2_ITERATIONS,
+    iterations: PIN_HASH_ITERATIONS,
     hasher: CryptoJS.algo.SHA256,
   });
   return wordArray.toString(CryptoJS.enc.Hex);
@@ -27,7 +30,7 @@ export function hashPin(pin: string, salt: string): string {
 export function deriveKey(pin: string, salt: string): CryptoJS.lib.WordArray {
   return CryptoJS.PBKDF2(pin, CryptoJS.enc.Hex.parse(salt), {
     keySize: KEY_BYTES / 4,
-    iterations: PBKDF2_ITERATIONS,
+    iterations: BACKUP_KEY_ITERATIONS,
     hasher: CryptoJS.algo.SHA256,
   });
 }

@@ -16,15 +16,15 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <SettingsProvider>
-          <DbProvider>
+        <DbProvider>
+          <SettingsProvider>
             <AuthProvider>
               <AppThemeProvider>
                 <RootGate />
               </AppThemeProvider>
             </AuthProvider>
-          </DbProvider>
-        </SettingsProvider>
+          </SettingsProvider>
+        </DbProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

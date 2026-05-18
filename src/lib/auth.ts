@@ -16,9 +16,13 @@ export async function setPin(pin: string): Promise<void> {
     throw new Error('PIN must be 4-6 digits.');
   }
   const salt = await generateSalt(16);
+  // Yield so navigation/UI can paint before the synchronous PBKDF2 stretch.
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
   const hash = hashPin(pin, salt);
-  await SecureStore.setItemAsync(KEY_PIN_SALT, salt);
-  await SecureStore.setItemAsync(KEY_PIN_HASH, hash);
+  await Promise.all([
+    SecureStore.setItemAsync(KEY_PIN_SALT, salt),
+    SecureStore.setItemAsync(KEY_PIN_HASH, hash),
+  ]);
 }
 
 export async function verifyPin(pin: string): Promise<boolean> {

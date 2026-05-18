@@ -7,15 +7,19 @@ import { PinDots } from '@/components/PinDots';
 import { setPin, setBiometricEnabled, isBiometricAvailable } from '@/lib/auth';
 import { useAuth } from '@/lib/auth-context';
 import { useSettings } from '@/lib/settings-context';
-import { CURRENCY_SYMBOLS } from '@/lib/format';
-import { scheduleDailyReminder, ensureNotificationPermission } from '@/lib/notifications';
+import { CurrencyChips } from '@/components/CurrencyChips';
+import {
+  scheduleDailyReminder,
+  ensureNotificationPermission,
+  notificationsSupported,
+} from '@/lib/notifications';
 
 type Step = 'welcome' | 'pin' | 'confirm' | 'preferences';
 
 export default function Onboarding() {
   const theme = useTheme();
   const { refresh, markUnlocked } = useAuth();
-  const { update } = useSettings();
+  const { updateMany } = useSettings();
   const [step, setStep] = useState<Step>('welcome');
   const [pin, setPinValue] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -51,33 +55,42 @@ export default function Onboarding() {
     setStep('confirm');
   };
 
-  const submitConfirmStep = async () => {
+  const submitConfirmStep = () => {
     if (pin !== confirm) {
       setError('PINs do not match. Try again.');
       setConfirm('');
       return;
     }
+    setError(null);
     setStep('preferences');
   };
 
   const finish = async () => {
     setBusy(true);
     try {
-      await setPin(pin);
-      await update('currency', currency);
-      const bioAvail = await isBiometricAvailable();
-      const bioOn = enableBiometric && bioAvail;
-      await setBiometricEnabled(bioOn);
-      await update('biometricEnabled', bioOn);
-      await update('reminderEnabled', enableReminder);
       const time = `${String(reminderHour).padStart(2, '0')}:00`;
-      await update('reminderTime', time);
-      if (enableReminder) {
-        const ok = await ensureNotificationPermission();
-        if (ok) await scheduleDailyReminder(reminderHour, 0);
-      }
+      const [, bioAvail] = await Promise.all([setPin(pin), isBiometricAvailable()]);
+      const bioOn = enableBiometric && bioAvail;
+      await Promise.all([
+        updateMany({
+          currency,
+          biometricEnabled: bioOn,
+          reminderEnabled: enableReminder,
+          reminderTime: time,
+        }),
+        setBiometricEnabled(bioOn),
+      ]);
       await refresh();
       markUnlocked();
+      if (enableReminder && notificationsSupported()) {
+        void ensureNotificationPermission().then((ok) => {
+          if (ok) return scheduleDailyReminder(reminderHour, 0);
+        });
+      }
+    } catch {
+      setError('Could not save your PIN. Please try again.');
+      setStep('confirm');
+      setConfirm('');
     } finally {
       setBusy(false);
     }
@@ -143,14 +156,11 @@ export default function Onboarding() {
               <Text variant="labelLarge" style={styles.label}>
                 Currency
               </Text>
-              <SegmentedButtons
+              <CurrencyChips
                 value={currency}
-                onValueChange={setCurrency}
-                buttons={Object.keys(CURRENCY_SYMBOLS).slice(0, 5).map((c) => ({
-                  value: c,
-                  label: c,
-                }))}
-                style={{ marginBottom: 16 }}
+                onChange={setCurrency}
+                style={{ marginHorizontal: -24 }}
+                contentPadding={24}
               />
               <View style={styles.switchRow}>
                 <Text variant="bodyLarge">Enable biometric unlock</Text>

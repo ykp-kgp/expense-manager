@@ -1,18 +1,43 @@
-import * as Notifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 
 const REMINDER_ID_KEY = 'em.reminder.daily';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+type NotificationsModule = typeof import('expo-notifications');
+
+let notificationsModule: NotificationsModule | null | undefined;
+
+async function getNotifications(): Promise<NotificationsModule | null> {
+  if (isExpoGo) return null;
+  if (notificationsModule !== undefined) return notificationsModule;
+  try {
+    const mod = await import('expo-notifications');
+    mod.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    notificationsModule = mod;
+    return mod;
+  } catch {
+    notificationsModule = null;
+    return null;
+  }
+}
+
+export function notificationsSupported(): boolean {
+  return !isExpoGo;
+}
 
 export async function ensureNotificationPermission(): Promise<boolean> {
+  const Notifications = await getNotifications();
+  if (!Notifications) return false;
   const settings = await Notifications.getPermissionsAsync();
   if (settings.granted) return true;
   const req = await Notifications.requestPermissionsAsync();
@@ -20,7 +45,8 @@ export async function ensureNotificationPermission(): Promise<boolean> {
 }
 
 export async function ensureAndroidChannel() {
-  if (Platform.OS !== 'android') return;
+  const Notifications = await getNotifications();
+  if (!Notifications || Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync('reminders', {
     name: 'Daily Reminders',
     importance: Notifications.AndroidImportance.DEFAULT,
@@ -33,6 +59,8 @@ export async function ensureAndroidChannel() {
 }
 
 export async function scheduleDailyReminder(hour: number, minute: number) {
+  const Notifications = await getNotifications();
+  if (!Notifications) return null;
   await cancelDailyReminder();
   const ok = await ensureNotificationPermission();
   if (!ok) return null;
@@ -40,7 +68,7 @@ export async function scheduleDailyReminder(hour: number, minute: number) {
   const id = await Notifications.scheduleNotificationAsync({
     identifier: REMINDER_ID_KEY,
     content: {
-      title: 'Log today\'s expenses',
+      title: "Log today's expenses",
       body: 'Take a moment to record what you spent today.',
       data: { kind: 'reminder' },
     },
@@ -55,6 +83,8 @@ export async function scheduleDailyReminder(hour: number, minute: number) {
 }
 
 export async function cancelDailyReminder() {
+  const Notifications = await getNotifications();
+  if (!Notifications) return;
   try {
     await Notifications.cancelScheduledNotificationAsync(REMINDER_ID_KEY);
   } catch {
@@ -63,6 +93,8 @@ export async function cancelDailyReminder() {
 }
 
 export async function notifyRecurringMaterialized(count: number) {
+  const Notifications = await getNotifications();
+  if (!Notifications) return;
   await ensureAndroidChannel();
   await Notifications.scheduleNotificationAsync({
     content: {

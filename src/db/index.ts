@@ -158,4 +158,18 @@ export async function setSetting(key: string, value: string | null) {
   );
 }
 
+export async function setSettingsBatch(entries: Record<string, string | null>) {
+  const sqlite = getRawDb();
+  const keys = Object.keys(entries);
+  if (keys.length === 0) return;
+  await sqlite.withTransactionAsync(async () => {
+    for (const key of keys) {
+      await sqlite.runAsync(
+        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+        [key, entries[key]]
+      );
+    }
+  });
+}
+
 export { schema };

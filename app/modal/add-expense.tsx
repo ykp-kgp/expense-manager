@@ -3,7 +3,6 @@ import { View, ScrollView, StyleSheet, Image, Alert, Platform } from 'react-nati
 import {
   Text,
   Button,
-  Chip,
   TextInput,
   IconButton,
   useTheme,
@@ -16,6 +15,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { format, parseISO } from 'date-fns';
 import { AmountKeypad } from '@/components/AmountKeypad';
 import { CategoryGrid } from '@/components/CategoryGrid';
+import { PaymentMethodChips } from '@/components/PaymentMethodChips';
 import { useDb } from '@/lib/db-context';
 import { useSettings } from '@/lib/settings-context';
 import {
@@ -186,19 +186,11 @@ export default function AddExpenseScreen() {
       <Text variant="titleSmall" style={styles.section}>
         Payment method
       </Text>
-      <View style={styles.chipRow}>
-        {paymentMethods.map((p) => (
-          <Chip
-            key={p.id}
-            selected={paymentMethodId === p.id}
-            onPress={() => setPaymentMethodId(p.id)}
-            icon={p.icon}
-            style={styles.chip}
-          >
-            {p.name}
-          </Chip>
-        ))}
-      </View>
+      <PaymentMethodChips
+        items={paymentMethods}
+        selectedId={paymentMethodId}
+        onSelect={setPaymentMethodId}
+      />
 
       <View style={styles.row}>
         <Button
@@ -264,8 +256,6 @@ const styles = StyleSheet.create({
   amountBox: { alignItems: 'center', paddingVertical: 8 },
   divider: { marginVertical: 12 },
   section: { marginTop: 8, marginLeft: 4 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  chip: { marginRight: 4, marginBottom: 4 },
   row: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
   input: { marginTop: 12 },
   preview: { width: '100%', height: 180, borderRadius: 12, marginTop: 8 },

@@ -5,13 +5,13 @@ import {
   TextInput,
   SegmentedButtons,
   Button,
-  Chip,
   useTheme,
 } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { format, parseISO } from 'date-fns';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { CategoryGrid } from '@/components/CategoryGrid';
+import { PaymentMethodChips } from '@/components/PaymentMethodChips';
 import { useDb } from '@/lib/db-context';
 import {
   createRecurringRule,
@@ -126,19 +126,11 @@ export default function RecurringEdit() {
       <Text variant="titleSmall" style={styles.label}>
         Payment method
       </Text>
-      <View style={styles.chipRow}>
-        {paymentMethods.map((p) => (
-          <Chip
-            key={p.id}
-            selected={paymentMethodId === p.id}
-            onPress={() => setPaymentMethodId(p.id)}
-            icon={p.icon}
-            style={{ marginRight: 6, marginBottom: 6 }}
-          >
-            {p.name}
-          </Chip>
-        ))}
-      </View>
+      <PaymentMethodChips
+        items={paymentMethods}
+        selectedId={paymentMethodId}
+        onSelect={setPaymentMethodId}
+      />
 
       <Text variant="titleSmall" style={styles.label}>
         Frequency
@@ -200,5 +192,4 @@ export default function RecurringEdit() {
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 8, paddingBottom: 32 },
   label: { marginTop: 12, marginLeft: 4 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap' },
 });
