@@ -59,11 +59,14 @@ export async function materializeRecurring(): Promise<number> {
       nextRun = advance(nextRun, rule.frequency, rule.intervalCount);
     }
 
-    if (nextRun !== rule.nextRunDate) {
-      const updates: Partial<typeof rule> = { nextRunDate: nextRun };
-      if (rule.endDate && isAfter(parseISO(nextRun), parseISO(rule.endDate))) {
-        updates.active = false;
-      }
+    const expired = !!rule.endDate && isAfter(parseISO(nextRun), parseISO(rule.endDate));
+    const updates: Partial<typeof rule> = {};
+    if (nextRun !== rule.nextRunDate) updates.nextRunDate = nextRun;
+    // Deactivate a rule whose next run is past its end date, even when no new
+    // expense was materialized this pass (e.g. it expired before today).
+    if (expired && rule.active) updates.active = false;
+
+    if (Object.keys(updates).length > 0) {
       await db
         .update(schema.recurringRules)
         .set(updates as never)

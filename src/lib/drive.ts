@@ -1,10 +1,11 @@
 import * as AuthSession from 'expo-auth-session';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import { listExpenses } from './queries';
+import { importExpensesFromJson } from './export';
 import { encryptString, decryptString } from './crypto';
 import { verifyPin } from './auth';
-import { getRawDb } from '@/db';
 
 const DRIVE_TOKEN_KEY = 'em.drive.refresh_token';
 const DRIVE_LAST_BACKUP_KEY = 'em.drive.last_backup_at';
@@ -19,7 +20,10 @@ const discovery = {
 
 function getClientId(): string | null {
   const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, unknown>;
-  return (extra.googleAndroidClientId as string) ?? null;
+  const iosId = (extra.googleIosClientId as string) ?? null;
+  const androidId = (extra.googleAndroidClientId as string) ?? null;
+  const id = Platform.OS === 'ios' ? iosId ?? androidId : androidId;
+  return id || null;
 }
 
 export async function isDriveConnected(): Promise<boolean> {
@@ -173,45 +177,23 @@ export async function restoreFromDrive(pin: string): Promise<BackupPreview> {
   );
   if (!res.ok) throw new Error(`Drive download failed: ${res.status}`);
   const encrypted = await res.text();
+  // Throws a clear "Incorrect PIN or corrupted backup" if the PIN is wrong.
   const plain = decryptString(encrypted, pin);
-  const data = JSON.parse(plain) as {
-    exportedAt: string;
-    expenses: Array<Record<string, unknown>>;
-  };
 
-  const sqlite = getRawDb();
-  await sqlite.withTransactionAsync(async () => {
-    await sqlite.runAsync('DELETE FROM expenses');
-    for (const e of data.expenses ?? []) {
-      const created =
-        typeof e.createdAt === 'string'
-          ? new Date(e.createdAt).getTime()
-          : Number(e.createdAt) || Date.now();
-      const updated =
-        typeof e.updatedAt === 'string'
-          ? new Date(e.updatedAt).getTime()
-          : Number(e.updatedAt) || created;
-      await sqlite.runAsync(
-        `INSERT INTO expenses
-          (amount, category_id, payment_method_id, date, note, attachment_path, recurring_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          Number(e.amount),
-          Number(e.categoryId),
-          Number(e.paymentMethodId),
-          String(e.date),
-          (e.note as string) ?? null,
-          null,
-          (e.recurringId as number) ?? null,
-          created,
-          updated,
-        ]
-      );
-    }
-  });
+  let exportedAt = '';
+  try {
+    exportedAt = (JSON.parse(plain) as { exportedAt?: string }).exportedAt ?? '';
+  } catch {
+    throw new Error('Backup file is not in the expected format.');
+  }
+
+  // Reuse the name-matching importer so a restore works across installs where
+  // category / payment-method IDs differ (the previous ID-based insert failed
+  // foreign-key checks on a fresh device).
+  const result = await importExpensesFromJson(plain, 'replace');
 
   return {
-    exportedAt: data.exportedAt,
-    expenseCount: Array.isArray(data.expenses) ? data.expenses.length : 0,
+    exportedAt,
+    expenseCount: result.imported,
   };
 }

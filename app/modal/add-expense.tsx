@@ -7,6 +7,9 @@ import {
   IconButton,
   useTheme,
   Divider,
+  Dialog,
+  Portal,
+  ActivityIndicator,
 } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -25,6 +28,16 @@ import {
   updateExpense,
 } from '@/lib/queries';
 import { CURRENCY_SYMBOLS, todayISO } from '@/lib/format';
+import {
+  canAddTransaction,
+  recordTransactionAdded,
+  grantAdReward,
+  getTransactionUsage,
+  getDailyFreeLimit,
+  getRewardPerAd,
+  type TransactionUsage,
+} from '@/lib/limits';
+import { showRewardedAd, adsSupported } from '@/lib/ads';
 
 const RECEIPTS_DIR = FileSystem.documentDirectory + 'receipts/';
 
@@ -50,6 +63,16 @@ export default function AddExpenseScreen() {
   const [note, setNote] = useState('');
   const [attachment, setAttachment] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [usage, setUsage] = useState<TransactionUsage | null>(null);
+  const [limitOpen, setLimitOpen] = useState(false);
+  const [adBusy, setAdBusy] = useState(false);
+
+  const limitEnforced = !editingId && adsSupported();
+
+  useEffect(() => {
+    if (editingId) return;
+    getTransactionUsage().then(setUsage).catch(() => undefined);
+  }, [editingId]);
 
   useEffect(() => {
     if (categoryId == null && categories.length) setCategoryId(categories[0].id);
@@ -106,20 +129,15 @@ export default function AddExpenseScreen() {
     setAttachment(null);
   };
 
-  const save = async () => {
-    if (numericAmount <= 0) {
-      Alert.alert('Enter an amount');
-      return;
-    }
-    if (!categoryId || !paymentMethodId) return;
+  const persist = async () => {
     setBusy(true);
     try {
       const now = new Date();
       if (editingId) {
         await updateExpense(editingId, {
           amount: numericAmount,
-          categoryId,
-          paymentMethodId,
+          categoryId: categoryId!,
+          paymentMethodId: paymentMethodId!,
           date,
           note: note || null,
           attachmentPath: attachment,
@@ -128,19 +146,60 @@ export default function AddExpenseScreen() {
       } else {
         await createExpense({
           amount: numericAmount,
-          categoryId,
-          paymentMethodId,
+          categoryId: categoryId!,
+          paymentMethodId: paymentMethodId!,
           date,
           note: note || null,
           attachmentPath: attachment,
           createdAt: now,
           updatedAt: now,
         });
+        await recordTransactionAdded();
       }
       bump();
       router.back();
     } finally {
       setBusy(false);
+    }
+  };
+
+  const save = async () => {
+    if (numericAmount <= 0) {
+      Alert.alert('Enter an amount');
+      return;
+    }
+    if (!categoryId || !paymentMethodId) return;
+    if (limitEnforced && !(await canAddTransaction())) {
+      setLimitOpen(true);
+      return;
+    }
+    await persist();
+  };
+
+  const watchAdToContinue = async () => {
+    setAdBusy(true);
+    try {
+      const result = await showRewardedAd();
+      if (result === 'dismissed') {
+        Alert.alert(
+          'Ad not completed',
+          'Please watch the full ad to unlock more entries for today.'
+        );
+        return;
+      }
+      // Reward a completed view; fail open when an ad simply can't be served
+      // so a flaky ad network never blocks the core "add expense" action.
+      if (result === 'earned') {
+        await grantAdReward();
+      }
+      setLimitOpen(false);
+      await persist();
+    } catch {
+      // Treat unexpected ad errors as "unavailable" and let the user continue.
+      setLimitOpen(false);
+      await persist();
+    } finally {
+      setAdBusy(false);
     }
   };
 
@@ -170,6 +229,21 @@ export default function AddExpenseScreen() {
           {symbol}
           {amount || '0'}
         </Text>
+        {limitEnforced && usage && (
+          <Text
+            variant="labelMedium"
+            style={{
+              marginTop: 6,
+              color: usage.remaining > 0 ? theme.colors.onSurfaceVariant : theme.colors.error,
+            }}
+          >
+            {usage.remaining > 0
+              ? `${usage.remaining} of ${getDailyFreeLimit()} free ${
+                  usage.remaining === 1 ? 'entry' : 'entries'
+                } left today`
+              : 'Daily limit reached — watch an ad to add more'}
+          </Text>
+        )}
       </View>
       <AmountKeypad value={amount} onChange={setAmount} />
 
@@ -247,6 +321,39 @@ export default function AddExpenseScreen() {
           {editingId ? 'Update' : 'Save'}
         </Button>
       </View>
+
+      <Portal>
+        <Dialog
+          visible={limitOpen}
+          onDismiss={() => {
+            if (!adBusy) setLimitOpen(false);
+          }}
+        >
+          <Dialog.Icon icon="movie-play-outline" />
+          <Dialog.Title style={{ textAlign: 'center' }}>Daily limit reached</Dialog.Title>
+          <Dialog.Content>
+            <Text style={{ textAlign: 'center' }}>
+              You&apos;ve used your {getDailyFreeLimit()} free entries for today. Watch a
+              short ad to add {getRewardPerAd()} more, or come back tomorrow.
+            </Text>
+            {adBusy && <ActivityIndicator style={{ marginTop: 16 }} />}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setLimitOpen(false)} disabled={adBusy}>
+              Not now
+            </Button>
+            <Button
+              mode="contained"
+              icon="play"
+              onPress={watchAdToContinue}
+              loading={adBusy}
+              disabled={adBusy}
+            >
+              Watch ad (+{getRewardPerAd()})
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </ScrollView>
   );
 }

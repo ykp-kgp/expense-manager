@@ -76,6 +76,132 @@ several native modules (`expo-sqlite`, `expo-secure-store`, `expo-notifications`
 npx eas build --profile development --platform android
 ```
 
+## Setting up Google AdMob (ads)
+
+The app shows a **rewarded ad** that lets users earn extra daily transactions
+once they hit the free limit. Out of the box it uses Google's official **test**
+IDs, so ads work in development without an AdMob account. To serve real ads you
+need to create your own credentials and plug them in.
+
+### 1. Create an AdMob account and app
+
+1. Go to the [Google AdMob console](https://apps.admob.com/) and sign in.
+2. **Apps -> Add app.** Choose the platform (Android), and select whether the
+   app is already on the Play Store or not.
+3. After it's created, open the app and copy its **App ID**. It looks like:
+   ```
+   ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
+   ```
+   (Note the `~` separator — this is the *App* ID, not an ad unit ID.)
+
+### 2. Create a Rewarded ad unit
+
+1. In your app, go to **Ad units -> Add ad unit**.
+2. Choose **Rewarded** as the format.
+3. Give it a name (e.g. "Extra transactions") and set the reward (the value here
+   is informational; the app grants `rewardPerAd` transactions regardless).
+4. Copy the **Ad unit ID**. It looks like:
+   ```
+   ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ
+   ```
+   (Note the `/` separator — this is the *ad unit* ID.)
+
+### 3. Plug the credentials into the app
+
+Both values go into `app.json`:
+
+1. **App ID** -> the `react-native-google-mobile-ads` plugin config:
+   ```json
+   [
+     "react-native-google-mobile-ads",
+     {
+       "androidAppId": "ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY",
+       "iosAppId": "ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY"
+     }
+   ]
+   ```
+2. **Rewarded ad unit ID** -> `expo.extra.ads`:
+   ```json
+   "extra": {
+     "ads": {
+       "rewardedAdUnitIdAndroid": "ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ",
+       "rewardedAdUnitIdIos": "ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ"
+     }
+   }
+   ```
+
+You usually only need the Android values for this app. Leave the iOS fields as
+`null` (or set them) if you aren't shipping to iOS.
+
+### 4. (Optional) Tune the free limit and reward
+
+In `app.json` under `expo.extra.limits`:
+
+```json
+"limits": {
+  "dailyFreeTransactions": 5,
+  "rewardPerAd": 5
+}
+```
+
+- `dailyFreeTransactions` — how many expenses a user can add per day before an ad
+  is required.
+- `rewardPerAd` — how many extra transactions one watched ad grants.
+
+### How it wires together (no code changes needed)
+
+You don't need to edit any source to switch from test to live IDs — the logic in
+`src/lib/ads.ts` reads the values from `app.json` at runtime:
+
+- `resolveRewardedUnitId()` reads `expo.extra.ads.rewardedAdUnitId*` and uses it
+  **only in production builds** (`!__DEV__`). In development it always uses
+  `TestIds.REWARDED` so you never risk your account.
+- If the configured ad unit ID is `null`, it also falls back to the test ad unit.
+- The App ID from the plugin config is baked into the native build during
+  `prebuild` / EAS build, so changing it **requires a rebuild** (a JS reload is
+  not enough).
+
+```44:46:src/lib/ads.ts
+  if (!__DEV__ && configured) return configured;
+  return ads.TestIds.REWARDED;
+```
+
+### 5. Rebuild
+
+Because the App ID is native config, create a fresh build after changing it:
+
+```bash
+eas build --profile production --platform android
+```
+
+> **Important:** Never ship the test IDs in a production build, and never click
+> your own live ads — both can get your AdMob account suspended. If you target
+> the EEA / UK, add a consent (UMP) flow before requesting ads.
+
+## Before shipping to Play Store
+
+A few things must be handled before a public release, mainly because of the
+ads integration and native modules:
+
+1. **Rebuild native code.** Both `react-native-google-mobile-ads` and
+   `expo-document-picker` are native modules, so a JS-only reload will not pick
+   them up. Create a fresh development/EAS build and install it on the device.
+2. **Replace the AdMob test IDs with your real ones.** The repo ships with
+   Google's official **test** IDs so you never risk account suspension during
+   development. Before publishing:
+   - Set your real AdMob **App ID** in `app.json` under the
+     `react-native-google-mobile-ads` plugin (`androidAppId` / `iosAppId`).
+   - Set your real **rewarded ad unit ID** in `app.json` under
+     `expo.extra.ads.rewardedAdUnitIdAndroid` (and `...Ios`). When left `null`,
+     the app falls back to the test ad unit.
+   - You can also tune the limit in `expo.extra.limits`
+     (`dailyFreeTransactions`, `rewardPerAd`).
+   - Never ship the test IDs, and never click your own live ads.
+3. **Play Console declarations.** Complete the Data safety form and, because the
+   app now serves ads, declare ad usage. If you target regions that require it
+   (EEA / UK), add a consent / UMP (User Messaging Platform) flow before
+   requesting ads.
+
 ## Production build (Play Store)
 
 1. Install EAS CLI: `npm i -g eas-cli`.

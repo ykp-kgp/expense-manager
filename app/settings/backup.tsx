@@ -20,6 +20,7 @@ import {
   restoreFromDrive,
   getLastBackupAt,
 } from '@/lib/drive';
+import { formatDate } from '@/lib/format';
 import { useDb } from '@/lib/db-context';
 
 export default function BackupScreen() {
@@ -83,12 +84,12 @@ export default function BackupScreen() {
       } else if (pinDialog === 'restore') {
         const r = await restoreFromDrive(pinInput);
         bump();
+        const taken = r.exportedAt
+          ? ` taken ${formatDate(r.exportedAt, 'd MMM yyyy, HH:mm')}`
+          : '';
         Alert.alert(
           'Restore complete',
-          `${r.expenseCount} expenses restored from backup taken ${format(
-            parseISO(r.exportedAt),
-            'd MMM yyyy, HH:mm'
-          )}.`
+          `${r.expenseCount} expense${r.expenseCount === 1 ? '' : 's'} restored from backup${taken}.`
         );
       }
       setPinDialog(null);

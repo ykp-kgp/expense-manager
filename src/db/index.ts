@@ -119,25 +119,29 @@ async function runMigrations(sqlite: SQLite.SQLiteDatabase) {
 
 async function seedIfNeeded() {
   const db = getDb();
-  const existing = await db.select().from(schema.categories).limit(1);
-  if (existing.length > 0) return;
 
-  await db.insert(schema.categories).values(
-    PREDEFINED_CATEGORIES.map((c, i) => ({
-      name: c.name,
-      icon: c.icon,
-      color: c.color,
-      sortOrder: i,
-    }))
-  );
+  const existingCats = await db.select().from(schema.categories).limit(1);
+  if (existingCats.length === 0) {
+    await db.insert(schema.categories).values(
+      PREDEFINED_CATEGORIES.map((c, i) => ({
+        name: c.name,
+        icon: c.icon,
+        color: c.color,
+        sortOrder: i,
+      }))
+    );
+  }
 
-  await db.insert(schema.paymentMethods).values(
-    PREDEFINED_PAYMENT_METHODS.map((p, i) => ({
-      name: p.name,
-      icon: p.icon,
-      sortOrder: i,
-    }))
-  );
+  const existingPms = await db.select().from(schema.paymentMethods).limit(1);
+  if (existingPms.length === 0) {
+    await db.insert(schema.paymentMethods).values(
+      PREDEFINED_PAYMENT_METHODS.map((p, i) => ({
+        name: p.name,
+        icon: p.icon,
+        sortOrder: i,
+      }))
+    );
+  }
 }
 
 export async function getSetting(key: string): Promise<string | null> {
