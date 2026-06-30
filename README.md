@@ -197,10 +197,44 @@ ads integration and native modules:
    - You can also tune the limit in `expo.extra.limits`
      (`dailyFreeTransactions`, `rewardPerAd`).
    - Never ship the test IDs, and never click your own live ads.
-3. **Play Console declarations.** Complete the Data safety form and, because the
-   app now serves ads, declare ad usage. If you target regions that require it
-   (EEA / UK), add a consent / UMP (User Messaging Platform) flow before
-   requesting ads.
+3. **Set the support email and privacy policy URL.** Add both under
+   `expo.extra` in `app.json`:
+   ```json
+   "extra": {
+     "supportEmail": "you@yourdomain.com",
+     "privacyPolicyUrl": "https://yourdomain.com/expense-manager/privacy"
+   }
+   ```
+   The About & Privacy screen wires the "Contact support" and "View full privacy
+   policy" links to these, and Play Console requires a publicly hosted privacy
+   policy URL (mandatory once the app serves ads / uses the advertising ID).
+4. **Play Console declarations.** Complete the Data safety form (see the
+   checklist below), the content rating questionnaire (declare that the app
+   contains ads), and the ads declaration.
+
+### User consent for ads (UMP / GDPR) — already wired
+
+The Google **UMP (User Messaging Platform)** consent flow is implemented in
+`src/lib/ads.ts` and runs automatically on app start (`initAds`) before any ad
+is requested:
+
+- `AdsConsent.gatherConsent()` requests the consent info and shows the
+  Google-rendered form when required (EEA / UK / Switzerland / regulated US
+  states). It's a no-op everywhere consent isn't required.
+- A **"Manage ad consent"** entry appears in Settings (only where the privacy
+  options form is required) so users can change their choice at any time via
+  `presentAdsPrivacyOptions()`.
+- Ad requests are configured as general-audience: `maxAdContentRating: G`,
+  `tagForChildDirectedTreatment: false`, and rewarded ads use
+  `requestNonPersonalizedAdsOnly: true`.
+
+To make this work you must still set up your messaging/consent form in the
+**AdMob console → Privacy & messaging** (create a GDPR/EU consent message and,
+if desired, a US states message) for your app. Without a published message the
+form simply won't show.
+
+You can locally test the EEA flow with `AdsConsentDebugGeography.EEA` and your
+device's test ID.
 
 ## Production build (Play Store)
 
@@ -239,17 +273,34 @@ without it.
 
 ## Play Store Data Safety answers
 
-- **Data collected:** None (default usage).
-- **Data shared:** None.
+The app itself collects nothing, but the bundled **Google AdMob SDK** does
+collect data to serve ads, so the Data safety form must reflect that. Don't
+answer "collects nothing" while ads are enabled — it will be rejected.
+
+- **Data collected by the app:** None.
+- **Data collected by the AdMob SDK (declare these):**
+  - **Device or other IDs** — collected, shared with Google, purpose:
+    Advertising or marketing. (The library adds the
+    `com.google.android.gms.permission.AD_ID` permission.)
+  - **Approximate location** (non-precise) and **app activity/interactions** —
+    if your AdMob configuration uses them; declare as collected/shared for
+    Advertising. When in doubt, consult AdMob's
+    [Data safety guidance](https://support.google.com/admob/answer/11150250).
+- **Data shared:** With Google for advertising (per above). No other sharing.
 - **Optional backup:** When the user enables Drive backup, an encrypted file is
   written to the user's own Google Drive `appDataFolder`. The developer has no
   access to it. Declare under "User-generated content -> Other user-generated
   content", purpose: "App functionality / Account management", optional, user
   initiated, not collected by the developer.
-- **Encryption in transit:** Yes (HTTPS to Google Drive).
+- **Encryption in transit:** Yes (HTTPS to Google Drive and ad networks).
 - **Encryption at rest:** Yes (AES via PBKDF2 from the user's PIN).
-- **Data deletion:** Disconnect Drive in Settings; delete the file from
-  Drive's manage-app-data screen.
+- **Data deletion:** All app data can be erased in-app via Settings → Danger
+  zone → Delete all data. For backup, disconnect Drive in Settings (revokes the
+  OAuth token) and delete the file from Drive's manage-app-data screen.
+- **Advertising ID:** Yes — declare advertising-ID usage. If you remove ads,
+  also remove the `AD_ID` permission and update this form.
+- **Privacy policy URL:** Required — host one and set it in
+  `expo.extra.privacyPolicyUrl` (also enter it in the Play Console).
 
 ## License
 

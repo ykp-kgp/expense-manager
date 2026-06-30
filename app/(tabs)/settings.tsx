@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View, Alert } from 'react-native';
 import {
   Text,
@@ -39,6 +39,7 @@ import {
   type ImportMode,
 } from '@/lib/export';
 import { wipeAllData } from '@/lib/reset';
+import { adsSupported, adsPrivacyOptionsRequired, presentAdsPrivacyOptions } from '@/lib/ads';
 
 export default function Settings() {
   const theme = useTheme();
@@ -64,6 +65,21 @@ export default function Settings() {
   const [reminderHour, setReminderHour] = useState(
     parseInt(settings.reminderTime.split(':')[0] ?? '21', 10)
   );
+  const [adConsentAvailable, setAdConsentAvailable] = useState(false);
+
+  useEffect(() => {
+    setAdConsentAvailable(adsSupported() && adsPrivacyOptionsRequired());
+  }, []);
+
+  const manageAdConsent = async () => {
+    const ok = await presentAdsPrivacyOptions();
+    if (!ok) {
+      Alert.alert(
+        'Unavailable',
+        'Ad privacy options are not available right now. Please try again later.'
+      );
+    }
+  };
 
   const toggleReminder = async (enabled: boolean) => {
     if (enabled) {
@@ -333,6 +349,14 @@ export default function Settings() {
       <Divider />
 
       <List.Section>
+        {adConsentAvailable && (
+          <List.Item
+            title="Manage ad consent"
+            description="Change your ad personalization choices"
+            left={(p) => <List.Icon {...p} icon="shield-account-outline" />}
+            onPress={manageAdConsent}
+          />
+        )}
         <List.Item
           title="About & Privacy"
           left={(p) => <List.Icon {...p} icon="information-outline" />}

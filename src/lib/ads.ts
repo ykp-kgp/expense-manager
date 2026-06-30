@@ -7,6 +7,7 @@ const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreCl
 
 let adsModule: AdsModule | null | undefined;
 let initialized = false;
+let privacyOptionsRequired = false;
 
 /** Whether rewarded ads can run in this runtime (native build, not Expo Go/web). */
 export function adsSupported(): boolean {
@@ -24,15 +25,77 @@ async function getAds(): Promise<AdsModule | null> {
   return adsModule;
 }
 
+/**
+ * Applies global ad request settings required by Play / AdMob policy:
+ * the app is general-audience and not directed at children, so we cap ad
+ * content at "G" and explicitly opt out of child-directed treatment.
+ */
+async function configureAdRequests(ads: AdsModule): Promise<void> {
+  try {
+    await ads.default().setRequestConfiguration({
+      maxAdContentRating: ads.MaxAdContentRating.G,
+      tagForChildDirectedTreatment: false,
+      tagForUnderAgeOfConsent: false,
+    });
+  } catch {
+    // Non-fatal: fall back to AdMob defaults.
+  }
+}
+
+/**
+ * Runs the Google UMP (User Messaging Platform) consent flow. This is required
+ * before requesting ads for users in the EEA / UK / Switzerland and regulated
+ * US states. It is a no-op for users where consent isn't required.
+ *
+ * Returns whether ads may be requested given the user's consent choices.
+ */
+async function gatherConsent(ads: AdsModule): Promise<boolean> {
+  try {
+    const info = await ads.AdsConsent.gatherConsent();
+    privacyOptionsRequired =
+      info.privacyOptionsRequirementStatus ===
+      ads.AdsConsentPrivacyOptionsRequirementStatus.REQUIRED;
+    return info.canRequestAds;
+  } catch {
+    // If the consent flow can't complete, let the SDK fall back to its own
+    // (restricted, non-personalized) behavior rather than blocking the app.
+    return true;
+  }
+}
+
 export async function initAds(): Promise<void> {
   if (initialized) return;
   const ads = await getAds();
   if (!ads) return;
   try {
+    await configureAdRequests(ads);
+    // Consent must be gathered before initializing / requesting ads.
+    await gatherConsent(ads);
     await ads.default().initialize();
     initialized = true;
   } catch {
     // ignore — ads simply won't be available
+  }
+}
+
+/** Whether the privacy options ("manage ad consent") entry should be shown. */
+export function adsPrivacyOptionsRequired(): boolean {
+  return privacyOptionsRequired;
+}
+
+/**
+ * Re-presents the consent / privacy options form so users (e.g. in the EEA) can
+ * change their ad-personalization choices at any time. Returns false when ads
+ * aren't supported or the form can't be shown.
+ */
+export async function presentAdsPrivacyOptions(): Promise<boolean> {
+  const ads = await getAds();
+  if (!ads) return false;
+  try {
+    await ads.AdsConsent.showPrivacyOptionsForm();
+    return true;
+  } catch {
+    return false;
   }
 }
 

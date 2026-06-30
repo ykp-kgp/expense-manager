@@ -82,6 +82,8 @@
       },
       "googleAndroidClientId": null,
       "googleIosClientId": null,
+      "supportEmail": null,
+      "privacyPolicyUrl": null,
       "ads": {
         "rewardedAdUnitIdAndroid": null,
         "rewardedAdUnitIdIos": null
