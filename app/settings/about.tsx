@@ -45,6 +45,13 @@ export default function About() {
             <Text style={styles.b}>Permissions: </Text>
             Photos – only when you attach a receipt. Notifications – for daily
             reminders and recurring expense logs. Biometrics – for app unlock.
+            Files – only when you import or export your own data.
+          </Text>
+          <Text style={styles.p}>
+            <Text style={styles.b}>Deleting your data: </Text>
+            You can permanently erase everything at any time from Settings →
+            Danger zone → Delete all data. This wipes all expenses, settings,
+            receipts, and your PIN from the device.
           </Text>
           <Text style={styles.p}>
             <Text style={styles.b}>Children: </Text>

@@ -4,6 +4,7 @@ import { generateSalt, hashPin } from './crypto';
 
 const KEY_PIN_HASH = 'em.pin_hash';
 const KEY_PIN_SALT = 'em.pin_salt';
+const KEY_PIN_LEN = 'em.pin_len';
 const KEY_BIO_ENABLED = 'em.bio_enabled';
 
 export async function hasPin(): Promise<boolean> {
@@ -22,7 +23,19 @@ export async function setPin(pin: string): Promise<void> {
   await Promise.all([
     SecureStore.setItemAsync(KEY_PIN_SALT, salt),
     SecureStore.setItemAsync(KEY_PIN_HASH, hash),
+    SecureStore.setItemAsync(KEY_PIN_LEN, String(pin.length)),
   ]);
+}
+
+/**
+ * Length of the stored PIN, used by the lock screen to know when the user
+ * has entered a complete PIN. Defaults to 6 for installs created before the
+ * length was tracked.
+ */
+export async function getPinLength(): Promise<number> {
+  const raw = await SecureStore.getItemAsync(KEY_PIN_LEN);
+  const len = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(len) && len >= 4 && len <= 6 ? len : 6;
 }
 
 export async function verifyPin(pin: string): Promise<boolean> {
@@ -36,6 +49,7 @@ export async function verifyPin(pin: string): Promise<boolean> {
 export async function clearPin(): Promise<void> {
   await SecureStore.deleteItemAsync(KEY_PIN_HASH);
   await SecureStore.deleteItemAsync(KEY_PIN_SALT);
+  await SecureStore.deleteItemAsync(KEY_PIN_LEN);
   await SecureStore.deleteItemAsync(KEY_BIO_ENABLED);
 }
 

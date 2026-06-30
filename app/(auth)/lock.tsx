@@ -5,7 +5,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PinKeypad } from '@/components/PinKeypad';
 import { PinDots } from '@/components/PinDots';
 import { useAuth } from '@/lib/auth-context';
-import { verifyPin, authenticateBiometric, isBiometricAvailable, isBiometricEnabled } from '@/lib/auth';
+import {
+  verifyPin,
+  authenticateBiometric,
+  isBiometricAvailable,
+  isBiometricEnabled,
+  getPinLength,
+} from '@/lib/auth';
 
 export default function Lock() {
   const theme = useTheme();
@@ -13,9 +19,11 @@ export default function Lock() {
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [bio, setBio] = useState(false);
+  const [pinLength, setPinLength] = useState(6);
 
   useEffect(() => {
     (async () => {
+      setPinLength(await getPinLength());
       const enabled = await isBiometricEnabled();
       const avail = await isBiometricAvailable();
       const useBio = enabled && avail;
@@ -33,7 +41,7 @@ export default function Lock() {
         const ok = await verifyPin(pin);
         if (ok) {
           markUnlocked();
-        } else if (pin.length >= 6) {
+        } else if (pin.length >= pinLength) {
           setError('Incorrect PIN');
           setTimeout(() => {
             setPin('');
@@ -42,11 +50,11 @@ export default function Lock() {
         }
       })();
     }
-  }, [pin, markUnlocked]);
+  }, [pin, pinLength, markUnlocked]);
 
   const handleDigit = (d: string) => {
     setError(null);
-    if (pin.length < 6) setPin(pin + d);
+    if (pin.length < pinLength) setPin(pin + d);
   };
 
   const handleBio = async () => {
@@ -60,7 +68,7 @@ export default function Lock() {
         <Text variant="headlineSmall" style={styles.title}>
           Enter your PIN
         </Text>
-        <PinDots length={6} filled={pin.length} error={!!error} />
+        <PinDots length={pinLength} filled={pin.length} error={!!error} />
         {error && (
           <Text style={{ color: theme.colors.error, textAlign: 'center' }}>{error}</Text>
         )}
