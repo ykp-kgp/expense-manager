@@ -42,17 +42,23 @@ export function AmountKeypad({
         <Pressable
           key={k}
           onPress={() => press(k)}
-          android_ripple={{ color: theme.colors.surfaceVariant, borderless: true }}
-          style={({ pressed }) => [styles.btn, { opacity: pressed ? 0.6 : 1 }]}
+          android_ripple={{ color: theme.colors.onSurfaceVariant }}
+          style={({ pressed }) => [
+            styles.btn,
+            {
+              backgroundColor: theme.colors.surfaceVariant,
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
         >
           {k === '<' ? (
             <MaterialCommunityIcons
               name="backspace-outline"
-              size={26}
-              color={theme.colors.onSurface}
+              size={30}
+              color={theme.colors.onSurfaceVariant}
             />
           ) : (
-            <Text variant="headlineSmall" style={{ color: theme.colors.onSurface }}>
+            <Text variant="headlineMedium" style={{ color: theme.colors.onSurface }}>
               {k}
             </Text>
           )}
@@ -67,14 +73,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
   },
   btn: {
     width: '32%',
-    aspectRatio: 1.7,
+    aspectRatio: 1.55,
+    minHeight: 64,
     alignItems: 'center',
     justifyContent: 'center',
-    margin: 2,
+    marginBottom: 8,
     borderRadius: 16,
+    overflow: 'hidden',
   },
 });

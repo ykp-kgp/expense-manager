@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -49,6 +50,7 @@ async function ensureReceiptsDir() {
 export default function AddExpenseScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string }>();
   const editingId = params.id ? parseInt(params.id, 10) : null;
   const { categories, paymentMethods, bump } = useDb();
@@ -220,7 +222,12 @@ export default function AddExpenseScreen() {
   };
 
   return (
-    <ScrollView style={{ backgroundColor: theme.colors.background }} contentContainerStyle={styles.container}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
       <View style={styles.amountBox}>
         <Text variant="titleMedium" style={{ opacity: 0.6 }}>
           Amount
@@ -308,8 +315,18 @@ export default function AddExpenseScreen() {
       {attachment && (
         <Image source={{ uri: attachment }} style={styles.preview} resizeMode="cover" />
       )}
+      </ScrollView>
 
-      <View style={styles.actions}>
+      <View
+        style={[
+          styles.footer,
+          {
+            paddingBottom: insets.bottom + 12,
+            backgroundColor: theme.colors.elevation.level2,
+            borderTopColor: theme.colors.outlineVariant,
+          },
+        ]}
+      >
         {editingId ? (
           <Button mode="text" textColor={theme.colors.error} onPress={remove}>
             Delete
@@ -317,7 +334,14 @@ export default function AddExpenseScreen() {
         ) : (
           <View />
         )}
-        <Button mode="contained" onPress={save} loading={busy} disabled={busy}>
+        <Button
+          mode="contained"
+          onPress={save}
+          loading={busy}
+          disabled={busy}
+          style={styles.saveBtn}
+          contentStyle={styles.saveBtnContent}
+        >
           {editingId ? 'Update' : 'Save'}
         </Button>
       </View>
@@ -354,22 +378,26 @@ export default function AddExpenseScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, gap: 8, paddingBottom: 32 },
+  container: { padding: 16, gap: 8, paddingBottom: 24 },
   amountBox: { alignItems: 'center', paddingVertical: 8 },
   divider: { marginVertical: 12 },
   section: { marginTop: 8, marginLeft: 4 },
   row: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
   input: { marginTop: 12 },
   preview: { width: '100%', height: 180, borderRadius: 12, marginTop: 8 },
-  actions: {
+  footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
+  saveBtn: { minWidth: 140 },
+  saveBtnContent: { paddingVertical: 4 },
 });
