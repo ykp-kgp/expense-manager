@@ -31,7 +31,7 @@ export default function About() {
       contentContainerStyle={styles.content}
     >
       <Card style={styles.card}>
-        <Card.Title title="Expense Manager" subtitle={`v${Constants.expoConfig?.version ?? '1.0.0'}`} />
+        <Card.Title title="Pockit" subtitle={`v${Constants.expoConfig?.version ?? '1.0.0'}`} />
         <Card.Content>
           <Text>
             A privacy-first, offline-only expense tracker. Your data lives on
@@ -46,7 +46,7 @@ export default function About() {
         <Card.Content>
           <Text style={styles.p}>
             <Text style={styles.b}>What we collect: </Text>
-            Nothing. Expense Manager does not collect, transmit, or share any
+            Nothing. Pockit does not collect, transmit, or share any
             personal information by default.
           </Text>
           <Text style={styles.p}>

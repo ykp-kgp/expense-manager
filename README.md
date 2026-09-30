@@ -1,4 +1,4 @@
-# Expense Manager
+# Pockit
 
 A privacy-first, offline-only Android expense tracker built with React Native + Expo.
 

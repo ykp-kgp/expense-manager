@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Expense Manager",
+    "name": "Pockit",
     "slug": "expense-manager",
     "scheme": "expensemanager",
     "version": "1.0.0",
@@ -44,7 +44,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Expense Manager to access your photos to attach receipts to expenses."
+          "photosPermission": "Allow Pockit to access your photos to attach receipts to expenses."
         }
       ],
       [
@@ -59,7 +59,8 @@
           "android": {
             "minSdkVersion": 26,
             "compileSdkVersion": 35,
-            "targetSdkVersion": 35
+            "targetSdkVersion": 35,
+            "kotlinVersion": "2.2.20"
           }
         }
       ],

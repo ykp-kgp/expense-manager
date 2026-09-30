@@ -70,7 +70,7 @@ export async function isBiometricAvailable(): Promise<boolean> {
 
 export async function authenticateBiometric(): Promise<boolean> {
   const result = await LocalAuthentication.authenticateAsync({
-    promptMessage: 'Unlock Expense Manager',
+    promptMessage: 'Unlock Pockit',
     fallbackLabel: 'Use PIN',
     disableDeviceFallback: true,
   });
