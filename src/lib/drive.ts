@@ -1,11 +1,10 @@
 import * as AuthSession from 'expo-auth-session';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 import { listExpenses } from './queries';
-import { importExpensesFromJson } from './export';
 import { encryptString, decryptString } from './crypto';
 import { verifyPin } from './auth';
+import { getRawDb } from '@/db';
 
 const DRIVE_TOKEN_KEY = 'em.drive.refresh_token';
 const DRIVE_LAST_BACKUP_KEY = 'em.drive.last_backup_at';
@@ -20,10 +19,7 @@ const discovery = {
 
 function getClientId(): string | null {
   const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, unknown>;
-  const iosId = (extra.googleIosClientId as string) ?? null;
-  const androidId = (extra.googleAndroidClientId as string) ?? null;
-  const id = Platform.OS === 'ios' ? iosId ?? androidId : androidId;
-  return id || null;
+  return (extra.googleAndroidClientId as string) ?? null;
 }
 
 export async function isDriveConnected(): Promise<boolean> {
@@ -38,7 +34,13 @@ export async function disconnectDrive() {
   const token = await SecureStore.getItemAsync(DRIVE_TOKEN_KEY);
   if (token) {
     try {
-      await fetch(`${discovery.revocationEndpoint}?token=${token}`, { method: 'POST' });
+      // Send the token in the request body, not the URL, so it is not captured
+      // in proxy/server logs or browser history.
+      await fetch(discovery.revocationEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token }).toString(),
+      });
     } catch {
       // ignore
     }
@@ -128,7 +130,8 @@ async function buildBackupPayload(): Promise<string> {
 export async function backupNow(pin: string): Promise<void> {
   const ok = await verifyPin(pin);
   if (!ok) throw new Error('Incorrect PIN.');
-  const salt = (await SecureStore.getItemAsync('em.pin_salt'))!;
+  const salt = await SecureStore.getItemAsync('em.pin_salt');
+  if (!salt) throw new Error('No PIN is set on this device.');
   const accessToken = await obtainAccessToken();
 
   const plain = await buildBackupPayload();
@@ -177,23 +180,67 @@ export async function restoreFromDrive(pin: string): Promise<BackupPreview> {
   );
   if (!res.ok) throw new Error(`Drive download failed: ${res.status}`);
   const encrypted = await res.text();
-  // Throws a clear "Incorrect PIN or corrupted backup" if the PIN is wrong.
+
+  // decryptString throws DecryptionError on a wrong PIN or a tampered file,
+  // so we never reach the destructive DB write with unauthenticated data.
   const plain = decryptString(encrypted, pin);
 
-  let exportedAt = '';
+  let data: { exportedAt?: unknown; expenses?: unknown };
   try {
-    exportedAt = (JSON.parse(plain) as { exportedAt?: string }).exportedAt ?? '';
+    data = JSON.parse(plain);
   } catch {
-    throw new Error('Backup file is not in the expected format.');
+    throw new Error('Backup contents are not valid. Nothing was changed.');
   }
 
-  // Reuse the name-matching importer so a restore works across installs where
-  // category / payment-method IDs differ (the previous ID-based insert failed
-  // foreign-key checks on a fresh device).
-  const result = await importExpensesFromJson(plain, 'replace');
+  // Validate the structure BEFORE deleting anything, so a malformed backup
+  // can never wipe the existing data.
+  if (!data || typeof data !== 'object' || !Array.isArray(data.expenses)) {
+    throw new Error('Backup does not contain any expenses. Nothing was changed.');
+  }
+  const rawExpenses = data.expenses as Array<Record<string, unknown>>;
+
+  const clean = rawExpenses.map((e, i) => {
+    const amount = Number(e.amount);
+    const categoryId = Number(e.categoryId);
+    const paymentMethodId = Number(e.paymentMethodId);
+    if (!Number.isFinite(amount) || !Number.isInteger(categoryId) || !Number.isInteger(paymentMethodId)) {
+      throw new Error(`Backup row ${i + 1} is malformed. Nothing was changed.`);
+    }
+    const created =
+      typeof e.createdAt === 'string'
+        ? new Date(e.createdAt).getTime()
+        : Number(e.createdAt) || Date.now();
+    const updated =
+      typeof e.updatedAt === 'string'
+        ? new Date(e.updatedAt).getTime()
+        : Number(e.updatedAt) || created;
+    return {
+      amount,
+      categoryId,
+      paymentMethodId,
+      date: typeof e.date === 'string' ? e.date : String(e.date ?? ''),
+      note: typeof e.note === 'string' ? e.note : null,
+      recurringId: typeof e.recurringId === 'number' ? e.recurringId : null,
+      created,
+      updated,
+    };
+  });
+
+  const sqlite = getRawDb();
+  await sqlite.withTransactionAsync(async () => {
+    await sqlite.runAsync('DELETE FROM expenses');
+    for (const e of clean) {
+      await sqlite.runAsync(
+        `INSERT INTO expenses
+          (amount, category_id, payment_method_id, date, note, attachment_path, recurring_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [e.amount, e.categoryId, e.paymentMethodId, e.date, e.note, null, e.recurringId, e.created, e.updated]
+      );
+    }
+  });
 
   return {
-    exportedAt,
-    expenseCount: result.imported,
+    exportedAt: typeof data.exportedAt === 'string' ? data.exportedAt : new Date().toISOString(),
+    expenseCount: clean.length,
   };
 }

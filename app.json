@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Pockit",
+    "name": "Expense Manager",
     "slug": "expense-manager",
     "scheme": "expensemanager",
     "version": "1.0.0",
@@ -44,7 +44,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Pockit to access your photos to attach receipts to expenses."
+          "photosPermission": "Allow Expense Manager to access your photos to attach receipts to expenses."
         }
       ],
       [
@@ -59,19 +59,11 @@
           "android": {
             "minSdkVersion": 26,
             "compileSdkVersion": 35,
-            "targetSdkVersion": 35,
-            "kotlinVersion": "2.2.20"
+            "targetSdkVersion": 35
           }
         }
       ],
-      "expo-font",
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
-        }
-      ]
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
@@ -80,18 +72,6 @@
       "router": {},
       "eas": {
         "projectId": "5217134c-454f-4b9f-ae56-232362209cfc"
-      },
-      "googleAndroidClientId": null,
-      "googleIosClientId": null,
-      "supportEmail": null,
-      "privacyPolicyUrl": null,
-      "ads": {
-        "rewardedAdUnitIdAndroid": null,
-        "rewardedAdUnitIdIos": null
-      },
-      "limits": {
-        "dailyFreeTransactions": 5,
-        "rewardPerAd": 5
       }
     }
   }

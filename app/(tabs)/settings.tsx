@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, StyleSheet, View, Alert } from 'react-native';
 import {
   Text,
@@ -12,7 +12,6 @@ import {
   Button,
   TextInput,
   RadioButton,
-  ActivityIndicator,
 } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useSettings, type ThemePref } from '@/lib/settings-context';
@@ -29,34 +28,17 @@ import {
   verifyPin,
 } from '@/lib/auth';
 import { useAuth } from '@/lib/auth-context';
-import { useDb } from '@/lib/db-context';
-import {
-  exportExpensesCsv,
-  exportExpensesJson,
-  shareFile,
-  pickJsonFile,
-  importExpensesFromJson,
-  type ImportMode,
-} from '@/lib/export';
-import { wipeAllData } from '@/lib/reset';
-import { adsSupported, adsPrivacyOptionsRequired, presentAdsPrivacyOptions } from '@/lib/ads';
+import { exportExpensesCsv, exportExpensesJson, shareFile } from '@/lib/export';
 
 export default function Settings() {
   const theme = useTheme();
   const router = useRouter();
   const { settings, update } = useSettings();
-  const { lock, refresh: refreshAuth } = useAuth();
-  const { bump, refresh: refreshDb } = useDb();
+  const { lock } = useAuth();
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [autoLockOpen, setAutoLockOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [importBusy, setImportBusy] = useState(false);
-  const [wipeOpen, setWipeOpen] = useState(false);
-  const [wipePin, setWipePin] = useState('');
-  const [wipeError, setWipeError] = useState<string | null>(null);
-  const [wipeBusy, setWipeBusy] = useState(false);
 
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
@@ -65,21 +47,6 @@ export default function Settings() {
   const [reminderHour, setReminderHour] = useState(
     parseInt(settings.reminderTime.split(':')[0] ?? '21', 10)
   );
-  const [adConsentAvailable, setAdConsentAvailable] = useState(false);
-
-  useEffect(() => {
-    setAdConsentAvailable(adsSupported() && adsPrivacyOptionsRequired());
-  }, []);
-
-  const manageAdConsent = async () => {
-    const ok = await presentAdsPrivacyOptions();
-    if (!ok) {
-      Alert.alert(
-        'Unavailable',
-        'Ad privacy options are not available right now. Please try again later.'
-      );
-    }
-  };
 
   const toggleReminder = async (enabled: boolean) => {
     if (enabled) {
@@ -153,49 +120,6 @@ export default function Settings() {
       await shareFile(path, 'application/json');
     } catch (e: any) {
       Alert.alert('Export failed', e?.message ?? String(e));
-    }
-  };
-
-  const runImport = async (mode: ImportMode) => {
-    setImportBusy(true);
-    try {
-      const raw = await pickJsonFile();
-      if (raw == null) return;
-      const result = await importExpensesFromJson(raw, mode);
-      await refreshDb();
-      bump();
-      setImportOpen(false);
-      const parts = [`${result.imported} expense${result.imported === 1 ? '' : 's'} imported`];
-      if (result.skipped > 0) {
-        parts.push(`${result.skipped} skipped (invalid)`);
-      }
-      Alert.alert('Import complete', parts.join(', ') + '.');
-    } catch (e: any) {
-      Alert.alert('Import failed', e?.message ?? String(e));
-    } finally {
-      setImportBusy(false);
-    }
-  };
-
-  const confirmWipe = async () => {
-    setWipeError(null);
-    const ok = await verifyPin(wipePin);
-    if (!ok) {
-      setWipeError('Incorrect PIN.');
-      return;
-    }
-    setWipeBusy(true);
-    try {
-      await wipeAllData();
-      await refreshDb();
-      bump();
-      setWipeOpen(false);
-      setWipePin('');
-      await refreshAuth();
-    } catch (e: any) {
-      setWipeError(e?.message ?? 'Could not delete data.');
-    } finally {
-      setWipeBusy(false);
     }
   };
 
@@ -316,12 +240,6 @@ export default function Settings() {
           onPress={exportJson}
         />
         <List.Item
-          title="Import from file"
-          description="Restore expenses from an exported JSON file"
-          left={(p) => <List.Icon {...p} icon="file-import-outline" />}
-          onPress={() => setImportOpen(true)}
-        />
-        <List.Item
           title="Backup & restore"
           description="Optional encrypted backup to your Google Drive"
           left={(p) => <List.Icon {...p} icon="cloud-outline" />}
@@ -332,31 +250,6 @@ export default function Settings() {
       <Divider />
 
       <List.Section>
-        <List.Subheader>Danger zone</List.Subheader>
-        <List.Item
-          title="Delete all data"
-          description="Erase all expenses, settings, PIN and receipts"
-          titleStyle={{ color: theme.colors.error }}
-          left={(p) => <List.Icon {...p} icon="delete-forever-outline" color={theme.colors.error} />}
-          onPress={() => {
-            setWipePin('');
-            setWipeError(null);
-            setWipeOpen(true);
-          }}
-        />
-      </List.Section>
-
-      <Divider />
-
-      <List.Section>
-        {adConsentAvailable && (
-          <List.Item
-            title="Manage ad consent"
-            description="Change your ad personalization choices"
-            left={(p) => <List.Icon {...p} icon="shield-account-outline" />}
-            onPress={manageAdConsent}
-          />
-        )}
         <List.Item
           title="About & Privacy"
           left={(p) => <List.Icon {...p} icon="information-outline" />}
@@ -452,84 +345,6 @@ export default function Settings() {
           <Dialog.Actions>
             <Button onPress={() => setPinOpen(false)}>Cancel</Button>
             <Button onPress={changePin}>Save</Button>
-          </Dialog.Actions>
-        </Dialog>
-
-        <Dialog
-          visible={importOpen}
-          onDismiss={() => {
-            if (!importBusy) setImportOpen(false);
-          }}
-        >
-          <Dialog.Title>Import expenses</Dialog.Title>
-          <Dialog.Content>
-            <Text style={{ marginBottom: 8 }}>
-              Choose a JSON file you previously exported. Categories and payment
-              methods are matched by name and created if missing. Receipt images
-              are not included in exports.
-            </Text>
-            <Text style={{ opacity: 0.7 }}>
-              • Merge adds the imported expenses to your existing ones.{'\n'}
-              • Replace deletes all current expenses first.
-            </Text>
-            {importBusy && <ActivityIndicator style={{ marginTop: 12 }} />}
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setImportOpen(false)} disabled={importBusy}>
-              Cancel
-            </Button>
-            <Button onPress={() => runImport('merge')} disabled={importBusy}>
-              Merge
-            </Button>
-            <Button
-              onPress={() => runImport('replace')}
-              disabled={importBusy}
-              textColor={theme.colors.error}
-            >
-              Replace
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-
-        <Dialog
-          visible={wipeOpen}
-          onDismiss={() => {
-            if (!wipeBusy) setWipeOpen(false);
-          }}
-        >
-          <Dialog.Title>Delete all data?</Dialog.Title>
-          <Dialog.Content>
-            <Text style={{ marginBottom: 12 }}>
-              This permanently erases all expenses, budgets, recurring rules,
-              receipts, settings, and your PIN. This cannot be undone. Export a
-              backup first if you want to keep your data.
-            </Text>
-            <TextInput
-              label="Enter PIN to confirm"
-              mode="outlined"
-              keyboardType="number-pad"
-              secureTextEntry
-              value={wipePin}
-              onChangeText={setWipePin}
-              maxLength={6}
-              autoFocus
-            />
-            {wipeBusy && <ActivityIndicator style={{ marginTop: 12 }} />}
-            {wipeError && (
-              <Text style={{ color: theme.colors.error, marginTop: 8 }}>{wipeError}</Text>
-            )}
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setWipeOpen(false)} disabled={wipeBusy}>
-              Cancel
-            </Button>
-            <Button
-              onPress={confirmWipe}
-              disabled={wipeBusy || wipePin.length < 4}
-              textColor={theme.colors.error}
-            >
-              Delete everything
-            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

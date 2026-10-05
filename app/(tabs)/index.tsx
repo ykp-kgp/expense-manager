@@ -135,20 +135,10 @@ export default function Dashboard() {
           </View>
           {recent.length === 0 ? (
             <Card style={styles.emptyCard}>
-              <Card.Content style={{ alignItems: 'center', gap: 8, paddingVertical: 12 }}>
-                <Text variant="titleMedium">No expenses yet</Text>
+              <Card.Content>
                 <Text style={{ textAlign: 'center', opacity: 0.7 }}>
-                  Start tracking your spending. Add your first expense and it will
-                  show up here, in reports, and against your budgets.
+                  No expenses yet. Tap + to add your first one.
                 </Text>
-                <Button
-                  mode="contained"
-                  icon="plus"
-                  onPress={() => router.push('/modal/add-expense')}
-                  style={{ marginTop: 8 }}
-                >
-                  Add your first expense
-                </Button>
               </Card.Content>
             </Card>
           ) : (

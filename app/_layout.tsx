@@ -11,7 +11,7 @@ import { SettingsProvider } from '@/lib/settings-context';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { materializeRecurring } from '@/lib/recurring';
 import { ensureAndroidChannel } from '@/lib/notifications';
-import { initAds } from '@/lib/ads';
+import { PrivacyOverlay } from '@/components/PrivacyOverlay';
 
 export default function RootLayout() {
   return (
@@ -22,6 +22,7 @@ export default function RootLayout() {
             <AuthProvider>
               <AppThemeProvider>
                 <RootGate />
+                <PrivacyOverlay />
               </AppThemeProvider>
             </AuthProvider>
           </SettingsProvider>
@@ -41,7 +42,6 @@ function RootGate() {
     if (!dbReady) return;
     ensureAndroidChannel().catch(() => undefined);
     materializeRecurring().catch(() => undefined);
-    initAds().catch(() => undefined);
   }, [dbReady]);
 
   useEffect(() => {
