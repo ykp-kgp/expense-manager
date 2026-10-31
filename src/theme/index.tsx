@@ -6,11 +6,13 @@ import {
   adaptNavigationTheme,
   type MD3Theme,
 } from 'react-native-paper';
+// As of SDK 56, expo-router vendors react-navigation and these must be imported
+// from 'expo-router' rather than '@react-navigation/native'.
 import {
   DarkTheme as NavigationDarkTheme,
   DefaultTheme as NavigationDefaultTheme,
   ThemeProvider,
-} from '@react-navigation/native';
+} from 'expo-router';
 import { useColorScheme } from 'react-native';
 import type { ReactNode } from 'react';
 import { useSettings } from '@/lib/settings-context';
@@ -27,18 +29,26 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
 
   const { theme: m3 } = useMaterial3Theme({ fallbackSourceColor: FALLBACK_SOURCE_COLOR });
 
+  const lightColors = { ...MD3LightTheme.colors, ...m3.light };
+  const darkColors = { ...MD3DarkTheme.colors, ...m3.dark };
+
   const paperTheme: MD3Theme = isDark
-    ? { ...MD3DarkTheme, colors: { ...MD3DarkTheme.colors, ...m3.dark } }
-    : { ...MD3LightTheme, colors: { ...MD3LightTheme.colors, ...m3.light } };
+    ? { ...MD3DarkTheme, colors: darkColors }
+    : { ...MD3LightTheme, colors: lightColors };
 
+  // react-native-paper 5.x's `adaptNavigationTheme` types predate the newer
+  // @react-navigation Theme shape (which requires `fonts`), so cast the inputs
+  // and merge the navigation `fonts` back in for correct runtime behavior.
   const { LightTheme: NavLight, DarkTheme: NavDark } = adaptNavigationTheme({
-    reactNavigationLight: NavigationDefaultTheme,
-    reactNavigationDark: NavigationDarkTheme,
-    materialLight: { ...MD3LightTheme, colors: { ...MD3LightTheme.colors, ...m3.light } },
-    materialDark: { ...MD3DarkTheme, colors: { ...MD3DarkTheme.colors, ...m3.dark } },
-  });
+    reactNavigationLight: NavigationDefaultTheme as any,
+    reactNavigationDark: NavigationDarkTheme as any,
+    materialLight: { ...MD3LightTheme, colors: lightColors },
+    materialDark: { ...MD3DarkTheme, colors: darkColors },
+  }) as { LightTheme: any; DarkTheme: any };
 
-  const navTheme = isDark ? NavDark : NavLight;
+  const navTheme = isDark
+    ? { ...NavDark, fonts: NavigationDarkTheme.fonts }
+    : { ...NavLight, fonts: NavigationDefaultTheme.fonts };
 
   return (
     <PaperProvider theme={paperTheme}>
