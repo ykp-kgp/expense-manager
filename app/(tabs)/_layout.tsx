@@ -1,43 +1,67 @@
 import { Tabs } from 'expo-router';
-import { useTheme } from 'react-native-paper';
+import { StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useAppTheme } from '@/theme';
+import { typography } from '@/theme/tokens';
 
 export default function TabsLayout() {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const p = ios.palette;
+
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: theme.colors.background },
-        headerTitleStyle: { color: theme.colors.onBackground },
-        tabBarStyle: { backgroundColor: theme.colors.surface },
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
+        headerShown: false,
+        tabBarActiveTintColor: p.tint,
+        tabBarInactiveTintColor: p.secondaryLabel,
+        tabBarStyle: {
+          backgroundColor: p.groupedCard,
+          borderTopColor: p.separator,
+          borderTopWidth: StyleSheet.hairlineWidth,
+        },
+        tabBarLabelStyle: {
+          fontSize: typography.caption2.fontSize,
+          fontWeight: '500',
+          letterSpacing: 0.1,
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="view-dashboard-outline" color={color} size={size} />
+          title: 'Summary',
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? 'chart-box' : 'chart-box-outline'}
+              color={color}
+              size={size}
+            />
           ),
         }}
       />
       <Tabs.Screen
         name="transactions"
         options={{
-          title: 'Transactions',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="format-list-bulleted" color={color} size={size} />
+          title: 'Activity',
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? 'calendar-text' : 'calendar-text-outline'}
+              color={color}
+              size={size}
+            />
           ),
         }}
       />
       <Tabs.Screen
         name="reports"
         options={{
-          title: 'Reports',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="chart-pie" color={color} size={size} />
+          title: 'Insights',
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? 'chart-pie' : 'chart-arc'}
+              color={color}
+              size={size}
+            />
           ),
         }}
       />
@@ -45,8 +69,12 @@ export default function TabsLayout() {
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cog-outline" color={color} size={size} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? 'cog' : 'cog-outline'}
+              color={color}
+              size={size}
+            />
           ),
         }}
       />

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Text, useTheme } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PinKeypad } from '@/components/PinKeypad';
 import { PinDots } from '@/components/PinDots';
+import { AppText } from '@/components/ui';
+import { useAppTheme } from '@/theme';
+import { spacing } from '@/theme/tokens';
 import { useAuth } from '@/lib/auth-context';
 import {
   verifyPin,
@@ -27,7 +30,8 @@ function formatCountdown(ms: number): string {
 }
 
 export default function Lock() {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const p = ios.palette;
   const { markUnlocked } = useAuth();
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -138,30 +142,36 @@ export default function Lock() {
     if (ok) await unlock();
   };
 
+  const statusText = locked
+    ? `Too many attempts. Try again in ${formatCountdown(remainingMs)}.`
+    : error
+      ? error
+      : attemptsRemaining != null && attemptsRemaining < 3
+        ? `${attemptsRemaining} attempt${attemptsRemaining === 1 ? '' : 's'} left before lockout.`
+        : null;
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: p.background }]}>
       <View style={styles.content}>
-        <Text variant="headlineSmall" style={styles.title}>
-          Enter your PIN
-        </Text>
-        <PinDots length={maxLen} filled={pin.length} error={!!error} />
-        {locked ? (
-          <Text style={{ color: theme.colors.error, textAlign: 'center' }}>
-            Too many attempts. Try again in {formatCountdown(remainingMs)}.
-          </Text>
-        ) : error ? (
-          <Text style={{ color: theme.colors.error, textAlign: 'center' }}>{error}</Text>
-        ) : (
-          attemptsRemaining != null &&
-          attemptsRemaining < 3 && (
-            <Text style={{ color: theme.colors.error, textAlign: 'center', opacity: 0.8 }}>
-              {attemptsRemaining} attempt{attemptsRemaining === 1 ? '' : 's'} left before lockout.
-            </Text>
-          )
-        )}
+        <View style={styles.top}>
+          <View style={[styles.badge, { backgroundColor: p.tint }]}>
+            <MaterialCommunityIcons name="lock" size={26} color={p.onTint} />
+          </View>
+          <AppText variant="title3" weight="600" style={styles.title}>
+            Enter Passcode
+          </AppText>
+          <PinDots length={maxLen} filled={pin.length} error={!!error} />
+          <View style={styles.statusWrap}>
+            {statusText ? (
+              <AppText variant="footnote" tone="negative" style={styles.status}>
+                {statusText}
+              </AppText>
+            ) : null}
+          </View>
+        </View>
         <PinKeypad
           onDigit={handleDigit}
-          onBackspace={() => setPin((p) => p.slice(0, -1))}
+          onBackspace={() => setPin((prev) => prev.slice(0, -1))}
           onBiometric={handleBio}
           showBiometric={bio && !locked}
           disabled={locked}
@@ -173,6 +183,17 @@ export default function Lock() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { flex: 1, justifyContent: 'center', padding: 24 },
+  content: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.xxl, gap: spacing.xl },
+  top: { alignItems: 'center' },
+  badge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
   title: { textAlign: 'center' },
+  statusWrap: { minHeight: 20, justifyContent: 'center' },
+  status: { textAlign: 'center' },
 });

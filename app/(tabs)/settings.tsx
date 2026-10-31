@@ -1,12 +1,7 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View, Alert } from 'react-native';
+import { StyleSheet, View, Alert } from 'react-native';
 import {
-  Text,
-  List,
   Switch,
-  Divider,
-  useTheme,
-  SegmentedButtons,
   Dialog,
   Portal,
   Button,
@@ -21,17 +16,16 @@ import {
   scheduleDailyReminder,
   ensureNotificationPermission,
 } from '@/lib/notifications';
-import {
-  setBiometricEnabled,
-  isBiometricAvailable,
-  setPin,
-  verifyPin,
-} from '@/lib/auth';
+import { setBiometricEnabled, isBiometricAvailable, setPin, verifyPin } from '@/lib/auth';
 import { useAuth } from '@/lib/auth-context';
 import { exportExpensesCsv, exportExpensesJson, shareFile } from '@/lib/export';
+import { AppText, Screen, Section, Row, LargeTitle, Segmented } from '@/components/ui';
+import { useAppTheme } from '@/theme';
+import { spacing } from '@/theme/tokens';
 
 export default function Settings() {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const p = ios.palette;
   const router = useRouter();
   const { settings, update } = useSettings();
   const { lock } = useAuth();
@@ -43,7 +37,6 @@ export default function Settings() {
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
-
   const [reminderHour, setReminderHour] = useState(
     parseInt(settings.reminderTime.split(':')[0] ?? '21', 10)
   );
@@ -79,18 +72,14 @@ export default function Settings() {
   };
 
   const saveReminderTime = async () => {
-    const time = `${String(reminderHour).padStart(2, '0')}:00`;
-    await update('reminderTime', time);
-    if (settings.reminderEnabled) {
-      await scheduleDailyReminder(reminderHour, 0);
-    }
+    await update('reminderTime', `${String(reminderHour).padStart(2, '0')}:00`);
+    if (settings.reminderEnabled) await scheduleDailyReminder(reminderHour, 0);
     setReminderOpen(false);
   };
 
   const changePin = async () => {
     setPinError(null);
-    const ok = await verifyPin(currentPin);
-    if (!ok) {
+    if (!(await verifyPin(currentPin))) {
       setPinError('Current PIN is incorrect.');
       return;
     }
@@ -107,8 +96,7 @@ export default function Settings() {
 
   const exportCsv = async () => {
     try {
-      const path = await exportExpensesCsv();
-      await shareFile(path, 'text/csv');
+      await shareFile(await exportExpensesCsv(), 'text/csv');
     } catch (e: any) {
       Alert.alert('Export failed', e?.message ?? String(e));
     }
@@ -116,146 +104,144 @@ export default function Settings() {
 
   const exportJson = async () => {
     try {
-      const path = await exportExpensesJson();
-      await shareFile(path, 'application/json');
+      await shareFile(await exportExpensesJson(), 'application/json');
     } catch (e: any) {
       Alert.alert('Export failed', e?.message ?? String(e));
     }
   };
 
+  const iosSwitch = (value: boolean, onValueChange: (v: boolean) => void) => (
+    <Switch value={value} onValueChange={onValueChange} color={p.toggleOn} />
+  );
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      <List.Section>
-        <List.Subheader>Appearance</List.Subheader>
-        <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-          <SegmentedButtons
-            value={settings.theme}
-            onValueChange={(v) => update('theme', v as ThemePref)}
-            buttons={[
-              { value: 'light', label: 'Light', icon: 'white-balance-sunny' },
-              { value: 'system', label: 'System', icon: 'theme-light-dark' },
-              { value: 'dark', label: 'Dark', icon: 'moon-waning-crescent' },
-            ]}
+    <Screen scroll padded={false}>
+      <LargeTitle title="Settings" />
+      <View style={styles.body}>
+        <Section header="Appearance">
+          <View style={styles.segmentRow}>
+            <Segmented
+              options={[
+                { value: 'light', label: 'Light' },
+                { value: 'system', label: 'System' },
+                { value: 'dark', label: 'Dark' },
+              ]}
+              value={settings.theme}
+              onChange={(v) => update('theme', v as ThemePref)}
+            />
+          </View>
+          <Row
+            title="Currency"
+            value={settings.currency}
+            icon="currency-usd"
+            iconBackground={p.toggleOn}
+            accessory="chevron"
+            onPress={() => setCurrencyOpen(true)}
           />
-        </View>
-        <List.Item
-          title="Currency"
-          description={settings.currency}
-          left={(p) => <List.Icon {...p} icon="currency-usd" />}
-          onPress={() => setCurrencyOpen(true)}
-        />
-      </List.Section>
+        </Section>
 
-      <Divider />
+        <Section header="Security">
+          <Row
+            title="Biometric unlock"
+            icon="fingerprint"
+            iconBackground={p.tint}
+            accessory={iosSwitch(settings.biometricEnabled, toggleBiometric)}
+          />
+          <Row
+            title="Change PIN"
+            icon="lock-reset"
+            iconBackground="#8E8E93"
+            accessory="chevron"
+            onPress={() => setPinOpen(true)}
+          />
+          <Row
+            title="Auto-lock"
+            value={`${settings.autoLockMinutes} min`}
+            icon="timer-outline"
+            iconBackground="#FF9500"
+            accessory="chevron"
+            onPress={() => setAutoLockOpen(true)}
+          />
+          <Row title="Lock now" icon="lock" iconBackground="#FF3B30" onPress={lock} />
+        </Section>
 
-      <List.Section>
-        <List.Subheader>Security</List.Subheader>
-        <List.Item
-          title="Biometric unlock"
-          left={(p) => <List.Icon {...p} icon="fingerprint" />}
-          right={() => (
-            <Switch
-              value={settings.biometricEnabled}
-              onValueChange={toggleBiometric}
-            />
-          )}
-        />
-        <List.Item
-          title="Change PIN"
-          left={(p) => <List.Icon {...p} icon="lock-reset" />}
-          onPress={() => setPinOpen(true)}
-        />
-        <List.Item
-          title="Auto-lock after"
-          description={`${settings.autoLockMinutes} minute${
-            settings.autoLockMinutes === 1 ? '' : 's'
-          }`}
-          left={(p) => <List.Icon {...p} icon="timer-outline" />}
-          onPress={() => setAutoLockOpen(true)}
-        />
-        <List.Item
-          title="Lock now"
-          left={(p) => <List.Icon {...p} icon="lock" />}
-          onPress={lock}
-        />
-      </List.Section>
+        <Section header="Reminders">
+          <Row
+            title="Daily reminder"
+            subtitle={settings.reminderEnabled ? `Every day at ${settings.reminderTime}` : 'Off'}
+            icon="bell-outline"
+            iconBackground="#FF3B30"
+            accessory={iosSwitch(settings.reminderEnabled, toggleReminder)}
+          />
+          <Row
+            title="Reminder time"
+            value={settings.reminderTime}
+            icon="clock-outline"
+            iconBackground="#5856D6"
+            accessory="chevron"
+            onPress={() => setReminderOpen(true)}
+            disabled={!settings.reminderEnabled}
+          />
+        </Section>
 
-      <Divider />
+        <Section header="Money">
+          <Row
+            title="Budgets"
+            icon="chart-donut"
+            iconBackground={p.toggleOn}
+            accessory="chevron"
+            onPress={() => router.push('/settings/budgets')}
+          />
+          <Row
+            title="Recurring expenses"
+            icon="repeat"
+            iconBackground="#5856D6"
+            accessory="chevron"
+            onPress={() => router.push('/settings/recurring')}
+          />
+          <Row
+            title="Categories"
+            icon="tag-multiple-outline"
+            iconBackground="#FF9500"
+            accessory="chevron"
+            onPress={() => router.push('/settings/categories')}
+          />
+        </Section>
 
-      <List.Section>
-        <List.Subheader>Reminders</List.Subheader>
-        <List.Item
-          title="Daily reminder"
-          description={settings.reminderEnabled ? `at ${settings.reminderTime}` : 'Off'}
-          left={(p) => <List.Icon {...p} icon="bell-outline" />}
-          right={() => (
-            <Switch
-              value={settings.reminderEnabled}
-              onValueChange={toggleReminder}
-            />
-          )}
-        />
-        <List.Item
-          title="Reminder time"
-          description={settings.reminderTime}
-          left={(p) => <List.Icon {...p} icon="clock-outline" />}
-          onPress={() => setReminderOpen(true)}
-          disabled={!settings.reminderEnabled}
-        />
-      </List.Section>
+        <Section header="Data" footer="Back up an encrypted copy to your own Google Drive. Your data never leaves your control.">
+          <Row
+            title="Export to CSV"
+            icon="file-delimited-outline"
+            iconBackground="#34C759"
+            accessory="chevron"
+            onPress={exportCsv}
+          />
+          <Row
+            title="Export to JSON"
+            icon="code-json"
+            iconBackground="#8E8E93"
+            accessory="chevron"
+            onPress={exportJson}
+          />
+          <Row
+            title="Backup & Restore"
+            icon="cloud-outline"
+            iconBackground={p.tint}
+            accessory="chevron"
+            onPress={() => router.push('/settings/backup')}
+          />
+        </Section>
 
-      <Divider />
-
-      <List.Section>
-        <List.Subheader>Money</List.Subheader>
-        <List.Item
-          title="Budgets"
-          left={(p) => <List.Icon {...p} icon="chart-donut" />}
-          onPress={() => router.push('/settings/budgets')}
-        />
-        <List.Item
-          title="Recurring expenses"
-          left={(p) => <List.Icon {...p} icon="repeat" />}
-          onPress={() => router.push('/settings/recurring')}
-        />
-        <List.Item
-          title="Categories"
-          left={(p) => <List.Icon {...p} icon="tag-multiple-outline" />}
-          onPress={() => router.push('/settings/categories')}
-        />
-      </List.Section>
-
-      <Divider />
-
-      <List.Section>
-        <List.Subheader>Data</List.Subheader>
-        <List.Item
-          title="Export to CSV"
-          left={(p) => <List.Icon {...p} icon="file-delimited-outline" />}
-          onPress={exportCsv}
-        />
-        <List.Item
-          title="Export to JSON"
-          left={(p) => <List.Icon {...p} icon="code-json" />}
-          onPress={exportJson}
-        />
-        <List.Item
-          title="Backup & restore"
-          description="Optional encrypted backup to your Google Drive"
-          left={(p) => <List.Icon {...p} icon="cloud-outline" />}
-          onPress={() => router.push('/settings/backup')}
-        />
-      </List.Section>
-
-      <Divider />
-
-      <List.Section>
-        <List.Item
-          title="About & Privacy"
-          left={(p) => <List.Icon {...p} icon="information-outline" />}
-          onPress={() => router.push('/settings/about')}
-        />
-      </List.Section>
+        <Section>
+          <Row
+            title="About & Privacy"
+            icon="information-outline"
+            iconBackground="#8E8E93"
+            accessory="chevron"
+            onPress={() => router.push('/settings/about')}
+          />
+        </Section>
+      </View>
 
       <Portal>
         <Dialog visible={currencyOpen} onDismiss={() => setCurrencyOpen(false)}>
@@ -278,15 +264,15 @@ export default function Settings() {
         <Dialog visible={reminderOpen} onDismiss={() => setReminderOpen(false)}>
           <Dialog.Title>Reminder time</Dialog.Title>
           <Dialog.Content>
-            <SegmentedButtons
-              value={String(reminderHour)}
-              onValueChange={(v) => setReminderHour(parseInt(v, 10))}
-              buttons={[
+            <Segmented
+              options={[
                 { value: '9', label: '9 AM' },
                 { value: '13', label: '1 PM' },
                 { value: '18', label: '6 PM' },
                 { value: '21', label: '9 PM' },
               ]}
+              value={String(reminderHour)}
+              onChange={(v) => setReminderHour(parseInt(v, 10))}
             />
           </Dialog.Content>
           <Dialog.Actions>
@@ -306,11 +292,7 @@ export default function Settings() {
               }}
             >
               {['1', '2', '5', '15', '60'].map((m) => (
-                <RadioButton.Item
-                  key={m}
-                  value={m}
-                  label={`${m} minute${m === '1' ? '' : 's'}`}
-                />
+                <RadioButton.Item key={m} value={m} label={`${m} minute${m === '1' ? '' : 's'}`} />
               ))}
             </RadioButton.Group>
           </Dialog.Content>
@@ -327,7 +309,7 @@ export default function Settings() {
               value={currentPin}
               onChangeText={setCurrentPin}
               maxLength={6}
-              style={{ marginBottom: 8 }}
+              style={styles.input}
             />
             <TextInput
               label="New PIN (4-6 digits)"
@@ -338,9 +320,11 @@ export default function Settings() {
               onChangeText={setNewPin}
               maxLength={6}
             />
-            {pinError && (
-              <Text style={{ color: theme.colors.error, marginTop: 8 }}>{pinError}</Text>
-            )}
+            {pinError ? (
+              <AppText variant="footnote" tone="negative" style={{ marginTop: spacing.sm }}>
+                {pinError}
+              </AppText>
+            ) : null}
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setPinOpen(false)}>Cancel</Button>
@@ -348,8 +332,12 @@ export default function Settings() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
-    </ScrollView>
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({});
+const styles = StyleSheet.create({
+  body: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  segmentRow: { padding: spacing.md },
+  input: { marginBottom: spacing.sm },
+});

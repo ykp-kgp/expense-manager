@@ -1,6 +1,7 @@
 import { View, StyleSheet, Pressable } from 'react-native';
-import { Text, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { AppText } from '@/components/ui';
+import { useAppTheme } from '@/theme';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '<'] as const;
 
@@ -11,7 +12,7 @@ export function AmountKeypad({
   value: string;
   onChange: (next: string) => void;
 }) {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
 
   const press = (k: string) => {
     if (k === '<') {
@@ -42,19 +43,22 @@ export function AmountKeypad({
         <Pressable
           key={k}
           onPress={() => press(k)}
-          android_ripple={{ color: theme.colors.surfaceVariant, borderless: true }}
-          style={({ pressed }) => [styles.btn, { opacity: pressed ? 0.6 : 1 }]}
+          android_ripple={{ color: ios.palette.fill, borderless: true }}
+          style={({ pressed }) => [
+            styles.btn,
+            pressed ? { backgroundColor: ios.palette.fill } : null,
+          ]}
         >
           {k === '<' ? (
             <MaterialCommunityIcons
               name="backspace-outline"
               size={26}
-              color={theme.colors.onSurface}
+              color={ios.palette.label}
             />
           ) : (
-            <Text variant="headlineSmall" style={{ color: theme.colors.onSurface }}>
+            <AppText variant="title2" weight="400">
               {k}
-            </Text>
+            </AppText>
           )}
         </Pressable>
       ))}

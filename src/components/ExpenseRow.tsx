@@ -1,8 +1,10 @@
 import { View, StyleSheet, Pressable } from 'react-native';
-import { Text, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { ExpenseWithRefs } from '@/lib/queries';
 import { formatCurrency, formatDate } from '@/lib/format';
+import { useAppTheme } from '@/theme';
+import { radius, spacing } from '@/theme/tokens';
+import { AppText } from '@/components/ui';
 
 export function ExpenseRow({
   item,
@@ -19,36 +21,41 @@ export function ExpenseRow({
   selected?: boolean;
   showDate?: boolean;
 }) {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const p = ios.palette;
+  const color = item.categoryColor ?? p.tint;
+  const subtitle =
+    [item.note || item.paymentMethodName, showDate ? formatDate(item.date, 'd MMM') : null]
+      .filter(Boolean)
+      .join('  •  ');
+
   return (
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
-      android_ripple={{ color: theme.colors.surfaceVariant }}
-      style={[
+      android_ripple={{ color: p.fill }}
+      style={({ pressed }) => [
         styles.row,
-        selected && { backgroundColor: theme.colors.secondaryContainer },
+        selected ? { backgroundColor: p.selection } : null,
+        pressed && onPress ? { backgroundColor: p.fill } : null,
       ]}
     >
-      <View style={[styles.iconWrap, { backgroundColor: item.categoryColor + '22' }]}>
-        <MaterialCommunityIcons
-          name={item.categoryIcon as any}
-          size={22}
-          color={item.categoryColor}
-        />
+      <View style={[styles.iconWrap, { backgroundColor: color + '1F' }]}>
+        <MaterialCommunityIcons name={item.categoryIcon as any} size={19} color={color} />
       </View>
-      <View style={{ flex: 1 }}>
-        <Text variant="bodyLarge" style={{ fontWeight: '600' }}>
+      <View style={styles.text}>
+        <AppText variant="body" weight="600" numberOfLines={1}>
           {item.categoryName}
-        </Text>
-        <Text variant="bodySmall" style={{ opacity: 0.7 }} numberOfLines={1}>
-          {item.note || item.paymentMethodName}
-          {showDate ? `  •  ${formatDate(item.date, 'd MMM')}` : ''}
-        </Text>
+        </AppText>
+        {subtitle ? (
+          <AppText variant="footnote" tone="secondary" numberOfLines={1}>
+            {subtitle}
+          </AppText>
+        ) : null}
       </View>
-      <Text variant="titleMedium" style={{ fontWeight: '600' }}>
+      <AppText variant="headline" numberOfLines={1}>
         {formatCurrency(item.amount, currency)}
-      </Text>
+      </AppText>
     </Pressable>
   );
 }
@@ -57,15 +64,17 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md - 1,
+    gap: spacing.md,
+    minHeight: 56,
   },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  text: { flex: 1, gap: 1 },
 });

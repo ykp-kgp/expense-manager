@@ -1,16 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View, StyleSheet } from 'react-native';
-import {
-  Text,
-  Card,
-  Button,
-  Dialog,
-  Portal,
-  TextInput,
-  ProgressBar,
-  useTheme,
-  IconButton,
-} from 'react-native-paper';
+import { View, StyleSheet, Pressable } from 'react-native';
+import { Button, Dialog, Portal, TextInput } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { addMonths, format, subMonths } from 'date-fns';
 import { useDb } from '@/lib/db-context';
 import { useSettings } from '@/lib/settings-context';
@@ -21,9 +12,13 @@ import {
   type BudgetProgress,
 } from '@/lib/queries';
 import { formatCurrency, monthKey } from '@/lib/format';
+import { AppText, Screen } from '@/components/ui';
+import { useAppTheme } from '@/theme';
+import { radius, spacing } from '@/theme/tokens';
 
 export default function BudgetsScreen() {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const p = ios.palette;
   const { categories, ready, version, bump } = useDb();
   const { settings } = useSettings();
   const [month, setMonth] = useState(new Date());
@@ -49,15 +44,10 @@ export default function BudgetsScreen() {
     if (!editing) return;
     const amount = parseFloat(draft);
     if (isNaN(amount) || amount <= 0) {
-      // allow delete via 0
       const existing = budgets.find((b) => b.categoryId === editing.categoryId);
       if (existing) await deleteBudget(existing.id);
     } else {
-      await upsertBudget({
-        categoryId: editing.categoryId,
-        month: monthKey(month),
-        amount,
-      });
+      await upsertBudget({ categoryId: editing.categoryId, month: monthKey(month), amount });
     }
     setEditing(null);
     setDraft('');
@@ -65,40 +55,54 @@ export default function BudgetsScreen() {
     load();
   };
 
+  const atCurrentMonth = monthKey(month) === monthKey(new Date());
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }} contentContainerStyle={styles.content}>
-      <Card style={styles.card}>
-        <Card.Content>
-          <View style={styles.monthRow}>
-            <IconButton icon="chevron-left" onPress={() => setMonth((m) => subMonths(m, 1))} />
-            <Text variant="titleMedium" style={{ flex: 1, textAlign: 'center' }}>
-              {format(month, 'MMMM yyyy')}
-            </Text>
-            <IconButton icon="chevron-right" onPress={() => setMonth((m) => addMonths(m, 1))} />
-          </View>
-        </Card.Content>
-      </Card>
+    <Screen scroll>
+      {/* Month stepper */}
+      <View style={[styles.card, { backgroundColor: p.groupedCard }]}>
+        <View style={styles.monthRow}>
+          <StepButton icon="chevron-left" onPress={() => setMonth((m) => subMonths(m, 1))} />
+          <AppText variant="headline">{format(month, 'MMMM yyyy')}</AppText>
+          <StepButton
+            icon="chevron-right"
+            disabled={atCurrentMonth}
+            onPress={() => setMonth((m) => addMonths(m, 1))}
+          />
+        </View>
+      </View>
 
-      <BudgetItem
-        name="Overall"
-        currency={settings.currency}
-        existing={budgets.find((b) => b.categoryId === null) ?? null}
-        onEdit={() => open(null, 'Overall')}
-      />
-
-      <Text variant="labelLarge" style={styles.heading}>
-        Per category
-      </Text>
-      {categories.map((c) => (
+      <AppText variant="footnote" tone="secondary" style={styles.groupTitle}>
+        OVERALL
+      </AppText>
+      <View style={[styles.card, { backgroundColor: p.groupedCard }]}>
         <BudgetItem
-          key={c.id}
-          name={c.name}
-          color={c.color}
+          name="Overall"
           currency={settings.currency}
-          existing={budgets.find((b) => b.categoryId === c.id) ?? null}
-          onEdit={() => open(c.id, c.name)}
+          existing={budgets.find((b) => b.categoryId === null) ?? null}
+          onEdit={() => open(null, 'Overall')}
         />
-      ))}
+      </View>
+
+      <AppText variant="footnote" tone="secondary" style={styles.groupTitle}>
+        PER CATEGORY
+      </AppText>
+      <View style={[styles.card, { backgroundColor: p.groupedCard }]}>
+        {categories.map((c, i) => (
+          <View key={c.id}>
+            <BudgetItem
+              name={c.name}
+              color={c.color}
+              currency={settings.currency}
+              existing={budgets.find((b) => b.categoryId === c.id) ?? null}
+              onEdit={() => open(c.id, c.name)}
+            />
+            {i < categories.length - 1 ? (
+              <View style={[styles.sep, { backgroundColor: p.separator }]} />
+            ) : null}
+          </View>
+        ))}
+      </View>
 
       <Portal>
         <Dialog visible={!!editing} onDismiss={() => setEditing(null)}>
@@ -118,7 +122,7 @@ export default function BudgetsScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -135,40 +139,76 @@ function BudgetItem({
   existing: BudgetProgress | null;
   onEdit: () => void;
 }) {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const p = ios.palette;
   const has = !!existing;
   const pct = has && existing!.amount > 0 ? Math.min(existing!.spent / existing!.amount, 1) : 0;
   const over = has && existing!.spent > existing!.amount;
+  const barColor = over ? p.negative : color ?? p.tint;
   return (
-    <Card style={styles.itemCard} onPress={onEdit}>
-      <Card.Content>
-        <View style={styles.itemRow}>
-          <Text variant="titleSmall" style={{ flex: 1 }}>
-            {name}
-          </Text>
-          <Text style={{ fontWeight: '600', color: over ? theme.colors.error : theme.colors.onSurface }}>
-            {has
-              ? `${formatCurrency(existing!.spent, currency)} / ${formatCurrency(existing!.amount, currency)}`
-              : 'Not set'}
-          </Text>
+    <Pressable
+      onPress={onEdit}
+      style={({ pressed }) => [styles.item, pressed && { backgroundColor: p.fill }]}
+    >
+      <View style={styles.itemRow}>
+        <AppText variant="body" weight="600" style={{ flex: 1 }} numberOfLines={1}>
+          {name}
+        </AppText>
+        <AppText variant="subhead" tone={over ? 'negative' : 'secondary'}>
+          {has
+            ? `${formatCurrency(existing!.spent, currency)} / ${formatCurrency(existing!.amount, currency)}`
+            : 'Not set'}
+        </AppText>
+      </View>
+      {has ? (
+        <View style={[styles.track, { backgroundColor: p.fill }]}>
+          <View style={[styles.fill, { width: `${pct * 100}%`, backgroundColor: barColor }]} />
         </View>
-        {has && (
-          <ProgressBar
-            progress={pct}
-            color={over ? theme.colors.error : color ?? theme.colors.primary}
-            style={{ marginTop: 8, height: 6, borderRadius: 3 }}
-          />
-        )}
-      </Card.Content>
-    </Card>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function StepButton({
+  icon,
+  onPress,
+  disabled,
+}: {
+  icon: 'chevron-left' | 'chevron-right';
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const { ios } = useAppTheme();
+  const p = ios.palette;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={8}
+      style={({ pressed }) => [
+        styles.step,
+        { backgroundColor: p.fill },
+        pressed && !disabled ? { opacity: 0.6 } : null,
+      ]}
+    >
+      <MaterialCommunityIcons name={icon} size={22} color={disabled ? p.tertiaryLabel : p.tint} />
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 12, gap: 8, paddingBottom: 32 },
-  card: { borderRadius: 16 },
-  monthRow: { flexDirection: 'row', alignItems: 'center' },
-  itemCard: { borderRadius: 12 },
-  itemRow: { flexDirection: 'row', alignItems: 'center' },
-  heading: { marginTop: 16, marginLeft: 8, opacity: 0.8 },
+  card: { borderRadius: radius.lg, overflow: 'hidden', marginBottom: spacing.sm },
+  monthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+  },
+  step: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  groupTitle: { marginLeft: spacing.lg + spacing.xs, marginTop: spacing.md, marginBottom: spacing.sm, letterSpacing: 0.5 },
+  item: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  track: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  fill: { height: 6, borderRadius: 3 },
+  sep: { height: StyleSheet.hairlineWidth, marginLeft: spacing.lg },
 });

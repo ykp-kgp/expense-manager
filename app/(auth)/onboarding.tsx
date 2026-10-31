@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, Button, SegmentedButtons, Switch, useTheme } from 'react-native-paper';
+import { Button, Switch } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PinKeypad } from '@/components/PinKeypad';
 import { PinDots } from '@/components/PinDots';
@@ -13,11 +14,15 @@ import {
   ensureNotificationPermission,
   notificationsSupported,
 } from '@/lib/notifications';
+import { AppText, Segmented } from '@/components/ui';
+import { useAppTheme } from '@/theme';
+import { radius, spacing } from '@/theme/tokens';
 
 type Step = 'welcome' | 'pin' | 'confirm' | 'preferences';
 
 export default function Onboarding() {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const p = ios.palette;
   const { refresh, markUnlocked } = useAuth();
   const { updateMany } = useSettings();
   const [step, setStep] = useState<Step>('welcome');
@@ -34,16 +39,13 @@ export default function Onboarding() {
     setError(null);
     if (step === 'pin') {
       if (pin.length < 6) setPinValue(pin + d);
-      if (pin.length + 1 >= 4) {
-        // user can press Continue
-      }
     } else if (step === 'confirm') {
       if (confirm.length < 6) setConfirm(confirm + d);
     }
   };
 
   const handleBack = () => {
-    if (step === 'pin') setPinValue((p) => p.slice(0, -1));
+    if (step === 'pin') setPinValue((v) => v.slice(0, -1));
     if (step === 'confirm') setConfirm((c) => c.slice(0, -1));
   };
 
@@ -72,12 +74,7 @@ export default function Onboarding() {
       const [, bioAvail] = await Promise.all([setPin(pin), isBiometricAvailable()]);
       const bioOn = enableBiometric && bioAvail;
       await Promise.all([
-        updateMany({
-          currency,
-          biometricEnabled: bioOn,
-          reminderEnabled: enableReminder,
-          reminderTime: time,
-        }),
+        updateMany({ currency, biometricEnabled: bioOn, reminderEnabled: enableReminder, reminderTime: time }),
         setBiometricEnabled(bioOn),
       ]);
       await refresh();
@@ -97,124 +94,178 @@ export default function Onboarding() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: p.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
+        style={styles.flex}
       >
-        <ScrollView contentContainerStyle={styles.content}>
-          {step === 'welcome' && (
-            <>
-              <Text variant="headlineLarge" style={styles.title}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {step === 'welcome' ? (
+            <View style={styles.welcome}>
+              <View style={[styles.hero, { backgroundColor: p.tint }]}>
+                <MaterialCommunityIcons name="wallet-outline" size={40} color={p.onTint} />
+              </View>
+              <AppText variant="largeTitle" weight="700" style={styles.center}>
                 Welcome
-              </Text>
-              <Text variant="bodyLarge" style={styles.subtitle}>
-                Track your spending privately. All data stays on your device unless
-                you choose to back it up.
-              </Text>
-              <Button mode="contained" onPress={() => setStep('pin')} style={styles.cta}>
-                Get Started
-              </Button>
-            </>
-          )}
+              </AppText>
+              <AppText variant="body" tone="secondary" style={styles.center}>
+                Track your spending privately. Everything stays on your device unless you choose to back it up.
+              </AppText>
+            </View>
+          ) : null}
 
-          {(step === 'pin' || step === 'confirm') && (
-            <>
-              <Text variant="headlineSmall" style={styles.title}>
-                {step === 'pin' ? 'Set a 4–6 digit PIN' : 'Confirm your PIN'}
-              </Text>
-              <Text variant="bodyMedium" style={styles.subtitle}>
-                You will use this PIN to unlock the app.
-              </Text>
-              <PinDots
-                length={6}
-                filled={step === 'pin' ? pin.length : confirm.length}
-                error={!!error}
-              />
-              {error && (
-                <Text style={{ color: theme.colors.error, textAlign: 'center' }}>
-                  {error}
-                </Text>
-              )}
+          {step === 'pin' || step === 'confirm' ? (
+            <View style={styles.pinStep}>
+              <AppText variant="title2" weight="700" style={styles.center}>
+                {step === 'pin' ? 'Create a Passcode' : 'Confirm Passcode'}
+              </AppText>
+              <AppText variant="subhead" tone="secondary" style={styles.center}>
+                You'll use this 4–6 digit passcode to unlock the app.
+              </AppText>
+              <PinDots length={6} filled={step === 'pin' ? pin.length : confirm.length} error={!!error} />
+              <View style={styles.statusWrap}>
+                {error ? (
+                  <AppText variant="footnote" tone="negative" style={styles.center}>
+                    {error}
+                  </AppText>
+                ) : null}
+              </View>
               <PinKeypad onDigit={handleDigit} onBackspace={handleBack} />
-              <Button
-                mode="contained"
-                onPress={step === 'pin' ? submitPinStep : submitConfirmStep}
-                disabled={(step === 'pin' ? pin.length : confirm.length) < 4}
-                style={styles.cta}
-              >
-                Continue
-              </Button>
-            </>
-          )}
+            </View>
+          ) : null}
 
-          {step === 'preferences' && (
-            <>
-              <Text variant="headlineSmall" style={styles.title}>
+          {step === 'preferences' ? (
+            <View style={styles.prefs}>
+              <AppText variant="title2" weight="700" style={styles.center}>
                 Preferences
-              </Text>
-              <Text variant="labelLarge" style={styles.label}>
-                Currency
-              </Text>
+              </AppText>
+              <AppText variant="footnote" tone="secondary" style={styles.prefLabel}>
+                CURRENCY
+              </AppText>
               <CurrencyChips
                 value={currency}
                 onChange={setCurrency}
-                style={{ marginHorizontal: -24 }}
-                contentPadding={24}
+                style={styles.currency}
+                contentPadding={spacing.lg}
               />
-              <View style={styles.switchRow}>
-                <Text variant="bodyLarge">Enable biometric unlock</Text>
-                <Switch value={enableBiometric} onValueChange={setEnableBiometric} />
+
+              <View style={[styles.card, { backgroundColor: p.groupedCard }]}>
+                <ToggleRow
+                  label="Biometric unlock"
+                  value={enableBiometric}
+                  onChange={setEnableBiometric}
+                  separator
+                />
+                <ToggleRow
+                  label="Daily reminder to log expenses"
+                  value={enableReminder}
+                  onChange={setEnableReminder}
+                />
               </View>
-              <View style={styles.switchRow}>
-                <Text variant="bodyLarge">Daily reminder to log expenses</Text>
-                <Switch value={enableReminder} onValueChange={setEnableReminder} />
-              </View>
-              {enableReminder && (
+
+              {enableReminder ? (
                 <>
-                  <Text variant="labelLarge" style={styles.label}>
-                    Reminder time
-                  </Text>
-                  <SegmentedButtons
-                    value={String(reminderHour)}
-                    onValueChange={(v) => setReminderHour(parseInt(v, 10))}
-                    buttons={[
+                  <AppText variant="footnote" tone="secondary" style={styles.prefLabel}>
+                    REMINDER TIME
+                  </AppText>
+                  <Segmented
+                    options={[
                       { value: '9', label: '9 AM' },
                       { value: '13', label: '1 PM' },
                       { value: '18', label: '6 PM' },
                       { value: '21', label: '9 PM' },
                     ]}
+                    value={String(reminderHour)}
+                    onChange={(v) => setReminderHour(parseInt(v, 10))}
                   />
                 </>
-              )}
-              <Button
-                mode="contained"
-                onPress={finish}
-                loading={busy}
-                disabled={busy}
-                style={styles.cta}
-              >
-                Finish
-              </Button>
-            </>
-          )}
+              ) : null}
+            </View>
+          ) : null}
         </ScrollView>
+
+        {step !== 'pin' && step !== 'confirm' ? (
+          <View style={styles.footer}>
+            <Button
+              mode="contained"
+              onPress={step === 'welcome' ? () => setStep('pin') : finish}
+              loading={busy}
+              disabled={busy}
+              style={styles.cta}
+              contentStyle={styles.ctaContent}
+            >
+              {step === 'welcome' ? 'Get Started' : 'Finish'}
+            </Button>
+          </View>
+        ) : (
+          <View style={styles.footer}>
+            <Button
+              mode="contained"
+              onPress={step === 'pin' ? submitPinStep : submitConfirmStep}
+              disabled={(step === 'pin' ? pin.length : confirm.length) < 4}
+              style={styles.cta}
+              contentStyle={styles.ctaContent}
+            >
+              Continue
+            </Button>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+function ToggleRow({
+  label,
+  value,
+  onChange,
+  separator,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  separator?: boolean;
+}) {
+  const { ios } = useAppTheme();
+  const p = ios.palette;
+  return (
+    <View>
+      <View style={styles.toggleRow}>
+        <AppText variant="body" style={{ flex: 1 }}>{label}</AppText>
+        <Switch value={value} onValueChange={onChange} color={p.toggleOn} />
+      </View>
+      {separator ? <View style={[styles.sep, { backgroundColor: p.separator }]} /> : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 24, gap: 12, flexGrow: 1 },
-  title: { textAlign: 'center', marginTop: 32 },
-  subtitle: { textAlign: 'center', marginBottom: 16, opacity: 0.8 },
-  cta: { marginTop: 24, alignSelf: 'center', minWidth: 200 },
-  label: { marginTop: 8, marginBottom: 8 },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  flex: { flex: 1 },
+  content: { flexGrow: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.xxxl },
+  center: { textAlign: 'center' },
+
+  welcome: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.md },
+  hero: {
+    width: 88,
+    height: 88,
+    borderRadius: 24,
     alignItems: 'center',
-    paddingVertical: 8,
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
   },
+
+  pinStep: { alignItems: 'center', gap: spacing.sm, paddingTop: spacing.xl },
+  statusWrap: { minHeight: 20, justifyContent: 'center', marginBottom: spacing.sm },
+
+  prefs: { gap: spacing.md },
+  prefLabel: { marginLeft: spacing.xs, marginTop: spacing.md, letterSpacing: 0.5 },
+  currency: { marginHorizontal: -spacing.lg },
+  card: { borderRadius: radius.lg, paddingHorizontal: spacing.lg },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', minHeight: 50, gap: spacing.md },
+  sep: { height: StyleSheet.hairlineWidth },
+
+  footer: { padding: spacing.lg },
+  cta: { borderRadius: radius.md },
+  ctaContent: { paddingVertical: spacing.xs },
 });

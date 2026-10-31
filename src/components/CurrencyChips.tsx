@@ -5,8 +5,9 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { Text, useTheme } from 'react-native-paper';
 import { CURRENCY_SYMBOLS } from '@/lib/format';
+import { AppText } from '@/components/ui';
+import { useAppTheme } from '@/theme';
 
 const CURRENCY_CODES = Object.keys(CURRENCY_SYMBOLS);
 
@@ -21,7 +22,8 @@ export function CurrencyChips({
   style?: StyleProp<ViewStyle>;
   contentPadding?: number;
 }) {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const t = ios.palette;
   return (
     <ScrollView
       horizontal
@@ -38,30 +40,15 @@ export function CurrencyChips({
             onPress={() => onChange(code)}
             style={[
               styles.chip,
-              {
-                backgroundColor: selected
-                  ? theme.colors.primary
-                  : theme.colors.surfaceVariant,
-                borderColor: selected ? theme.colors.primary : theme.colors.outline,
-              },
+              { backgroundColor: selected ? t.tint : t.fill },
             ]}
           >
-            <Text
-              style={[
-                styles.code,
-                { color: selected ? theme.colors.onPrimary : theme.colors.onSurface },
-              ]}
-            >
+            <AppText variant="subhead" weight="700" color={selected ? t.onTint : t.label}>
               {code}
-            </Text>
-            <Text
-              style={[
-                styles.symbol,
-                { color: selected ? theme.colors.onPrimary : theme.colors.primary },
-              ]}
-            >
+            </AppText>
+            <AppText variant="footnote" weight="600" color={selected ? t.onTint : t.secondaryLabel}>
               {symbol}
-            </Text>
+            </AppText>
           </Pressable>
         );
       })}
@@ -78,14 +65,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
-    minWidth: 76,
+    minWidth: 72,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
-    borderWidth: 2,
+    paddingVertical: 9,
+    borderRadius: 999,
+    gap: 1,
   },
-  code: { fontSize: 14, fontWeight: '700' },
-  symbol: { fontSize: 15, marginTop: 2, fontWeight: '600' },
 });

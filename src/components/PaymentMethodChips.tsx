@@ -1,7 +1,8 @@
 import { StyleSheet, Pressable, ScrollView } from 'react-native';
-import { Text, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { PaymentMethod } from '@/db/schema';
+import { AppText } from '@/components/ui';
+import { useAppTheme } from '@/theme';
 
 export function PaymentMethodChips({
   items,
@@ -12,41 +13,33 @@ export function PaymentMethodChips({
   selectedId: number | null;
   onSelect: (id: number) => void;
 }) {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const t = ios.palette;
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-      {items.map((p) => {
-        const selected = p.id === selectedId;
+      {items.map((pm) => {
+        const selected = pm.id === selectedId;
         return (
           <Pressable
-            key={p.id}
-            onPress={() => onSelect(p.id)}
+            key={pm.id}
+            onPress={() => onSelect(pm.id)}
             style={[
               styles.chip,
-              {
-                backgroundColor: selected
-                  ? theme.colors.primary
-                  : theme.colors.surfaceVariant,
-                borderColor: selected ? theme.colors.primary : theme.colors.outline,
-              },
+              { backgroundColor: selected ? t.tint : t.fill },
             ]}
           >
             <MaterialCommunityIcons
-              name={p.icon as keyof typeof MaterialCommunityIcons.glyphMap}
-              size={22}
-              color={selected ? theme.colors.onPrimary : theme.colors.primary}
+              name={pm.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+              size={18}
+              color={selected ? t.onTint : t.tint}
             />
-            <Text
-              style={[
-                styles.label,
-                {
-                  color: selected ? theme.colors.onPrimary : theme.colors.onSurface,
-                  fontWeight: selected ? '700' : '500',
-                },
-              ]}
+            <AppText
+              variant="subhead"
+              weight="600"
+              color={selected ? t.onTint : t.label}
             >
-              {p.name}
-            </Text>
+              {pm.name}
+            </AppText>
           </Pressable>
         );
       })}
@@ -55,15 +48,13 @@ export function PaymentMethodChips({
 }
 
 const styles = StyleSheet.create({
-  row: { paddingHorizontal: 12, paddingVertical: 6, gap: 8 },
+  row: { paddingHorizontal: 16, paddingVertical: 4, gap: 8 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 2,
-    marginRight: 8,
+    paddingVertical: 9,
+    borderRadius: 999,
   },
-  label: { marginLeft: 6 },
 });
