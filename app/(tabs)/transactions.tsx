@@ -1,32 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, SectionList, Alert } from 'react-native';
-import {
-  Searchbar,
-  Chip,
-  Text,
-  useTheme,
-  FAB,
-  Menu,
-  IconButton,
-  Appbar,
-} from 'react-native-paper';
+import { View, StyleSheet, SectionList, Alert, Pressable } from 'react-native';
+import { Menu } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { format, parseISO } from 'date-fns';
 import { useDb } from '@/lib/db-context';
 import { useSettings } from '@/lib/settings-context';
-import {
-  listExpenses,
-  deleteExpense,
-  type ExpenseWithRefs,
-} from '@/lib/queries';
+import { listExpenses, deleteExpense, type ExpenseWithRefs } from '@/lib/queries';
 import { ExpenseRow } from '@/components/ExpenseRow';
 import { formatCurrency } from '@/lib/format';
+import { AppText, LargeTitle, Segmented, SearchField } from '@/components/ui';
+import { useAppTheme } from '@/theme';
+import { radius, spacing } from '@/theme/tokens';
 
 type DateRange = 'this_month' | 'last_month' | 'last_3_months' | 'all';
 
+const RANGE_OPTIONS = [
+  { value: 'this_month' as const, label: 'Month' },
+  { value: 'last_month' as const, label: 'Last' },
+  { value: 'last_3_months' as const, label: '3 Mo' },
+  { value: 'all' as const, label: 'All' },
+];
+
 export default function Transactions() {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const p = ios.palette;
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { categories, paymentMethods, ready, version, bump } = useDb();
   const { settings } = useSettings();
 
@@ -61,8 +62,7 @@ export default function Transactions() {
   }, [range, categoryId, paymentMethodId, search]);
 
   const load = useCallback(async () => {
-    const rows = await listExpenses(filter);
-    setItems(rows);
+    setItems(await listExpenses(filter));
   }, [filter]);
 
   useEffect(() => {
@@ -84,35 +84,27 @@ export default function Transactions() {
     }
     return Array.from(map.entries())
       .sort(([a], [b]) => (a < b ? 1 : -1))
-      .map(([date, data]) => {
-        const total = data.reduce((s, x) => s + x.amount, 0);
-        return {
-          title: format(parseISO(date), 'EEEE, d MMM yyyy'),
-          total,
-          data,
-        };
-      });
+      .map(([date, data]) => ({
+        title: format(parseISO(date), 'EEEE, d MMMM'),
+        total: data.reduce((s, x) => s + x.amount, 0),
+        data,
+      }));
   }, [items]);
 
-  const toggleSelect = (id: number) => {
+  const toggleSelect = (id: number) =>
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
 
   const onItemPress = (item: ExpenseWithRefs) => {
-    if (selected.size > 0) {
-      toggleSelect(item.id);
-    } else {
-      router.push(`/modal/add-expense?id=${item.id}`);
-    }
+    if (selected.size > 0) toggleSelect(item.id);
+    else router.push(`/modal/add-expense?id=${item.id}`);
   };
 
   const deleteSelected = () => {
-    Alert.alert(`Delete ${selected.size} expense(s)?`, 'This cannot be undone.', [
+    Alert.alert(`Delete ${selected.size} expense${selected.size === 1 ? '' : 's'}?`, 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -126,181 +118,191 @@ export default function Transactions() {
     ]);
   };
 
+  const catLabel = categoryId ? categories.find((c) => c.id === categoryId)?.name ?? 'Category' : 'Category';
+  const pmLabel = paymentMethodId ? paymentMethods.find((m) => m.id === paymentMethodId)?.name ?? 'Method' : 'Method';
+
   return (
-    <View style={[styles.flex, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.flex, { backgroundColor: p.background }]}>
       {selected.size > 0 ? (
-        <Appbar.Header>
-          <Appbar.Action icon="close" onPress={() => setSelected(new Set())} />
-          <Appbar.Content title={`${selected.size} selected`} />
-          <Appbar.Action icon="delete" onPress={deleteSelected} />
-        </Appbar.Header>
-      ) : (
-        <View style={styles.searchWrap}>
-          <Searchbar
-            placeholder="Search amount or note"
-            value={search}
-            onChangeText={setSearch}
-          />
+        <View style={[styles.selectionBar, { paddingTop: insets.top + spacing.sm, borderBottomColor: p.separator }]}>
+          <Pressable onPress={() => setSelected(new Set())} hitSlop={8}>
+            <AppText variant="body" tone="tint">Cancel</AppText>
+          </Pressable>
+          <AppText variant="headline">{selected.size} selected</AppText>
+          <Pressable onPress={deleteSelected} hitSlop={8}>
+            <AppText variant="body" tone="negative" weight="600">Delete</AppText>
+          </Pressable>
         </View>
+      ) : (
+        <LargeTitle
+          title="Activity"
+          trailing={
+            <Pressable
+              onPress={() => router.push('/modal/add-expense')}
+              hitSlop={10}
+              accessibilityLabel="Add expense"
+              style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.5 }]}
+            >
+              <MaterialCommunityIcons name="plus" size={26} color={p.tint} />
+            </Pressable>
+          }
+        />
       )}
 
-      <View style={styles.filters}>
-        {(['this_month', 'last_month', 'last_3_months', 'all'] as DateRange[]).map((r) => (
-          <Chip
-            key={r}
-            selected={range === r}
-            onPress={() => setRange(r)}
-            style={styles.chip}
-            compact
+      <View style={styles.controls}>
+        <SearchField value={search} onChangeText={setSearch} placeholder="Search amount or note" />
+        <Segmented options={RANGE_OPTIONS} value={range} onChange={setRange} />
+        <View style={styles.filterRow}>
+          <Menu
+            visible={catMenu}
+            onDismiss={() => setCatMenu(false)}
+            anchor={
+              <FilterChip
+                label={catLabel}
+                active={categoryId !== null}
+                icon="tag-outline"
+                onPress={() => setCatMenu(true)}
+              />
+            }
           >
-            {labelFor(r)}
-          </Chip>
-        ))}
-        <Menu
-          visible={catMenu}
-          onDismiss={() => setCatMenu(false)}
-          anchor={
-            <Chip
-              icon="tag"
-              selected={categoryId !== null}
-              onPress={() => setCatMenu(true)}
-              style={styles.chip}
-              compact
-            >
-              {categoryId ? categories.find((c) => c.id === categoryId)?.name : 'All categories'}
-            </Chip>
-          }
-        >
-          <Menu.Item
-            onPress={() => {
-              setCategoryId(null);
-              setCatMenu(false);
-            }}
-            title="All"
-          />
-          {categories.map((c) => (
-            <Menu.Item
-              key={c.id}
-              onPress={() => {
-                setCategoryId(c.id);
-                setCatMenu(false);
-              }}
-              title={c.name}
-            />
-          ))}
-        </Menu>
-        <Menu
-          visible={pmMenu}
-          onDismiss={() => setPmMenu(false)}
-          anchor={
-            <Chip
-              icon="credit-card"
-              selected={paymentMethodId !== null}
-              onPress={() => setPmMenu(true)}
-              style={styles.chip}
-              compact
-            >
-              {paymentMethodId
-                ? paymentMethods.find((p) => p.id === paymentMethodId)?.name
-                : 'All methods'}
-            </Chip>
-          }
-        >
-          <Menu.Item
-            onPress={() => {
-              setPaymentMethodId(null);
-              setPmMenu(false);
-            }}
-            title="All"
-          />
-          {paymentMethods.map((p) => (
-            <Menu.Item
-              key={p.id}
-              onPress={() => {
-                setPaymentMethodId(p.id);
-                setPmMenu(false);
-              }}
-              title={p.name}
-            />
-          ))}
-        </Menu>
+            <Menu.Item onPress={() => { setCategoryId(null); setCatMenu(false); }} title="All categories" />
+            {categories.map((c) => (
+              <Menu.Item key={c.id} onPress={() => { setCategoryId(c.id); setCatMenu(false); }} title={c.name} />
+            ))}
+          </Menu>
+          <Menu
+            visible={pmMenu}
+            onDismiss={() => setPmMenu(false)}
+            anchor={
+              <FilterChip
+                label={pmLabel}
+                active={paymentMethodId !== null}
+                icon="credit-card-outline"
+                onPress={() => setPmMenu(true)}
+              />
+            }
+          >
+            <Menu.Item onPress={() => { setPaymentMethodId(null); setPmMenu(false); }} title="All methods" />
+            {paymentMethods.map((m) => (
+              <Menu.Item key={m.id} onPress={() => { setPaymentMethodId(m.id); setPmMenu(false); }} title={m.name} />
+            ))}
+          </Menu>
+        </View>
       </View>
 
       <SectionList
         sections={sections}
         keyExtractor={(item) => String(item.id)}
-        ItemSeparatorComponent={() => <View style={styles.sep} />}
-        contentContainerStyle={{ paddingBottom: 96 }}
+        contentContainerStyle={styles.listContent}
+        stickySectionHeadersEnabled={false}
         renderSectionHeader={({ section }) => (
-          <View
-            style={[
-              styles.sectionHeader,
-              { backgroundColor: theme.colors.surfaceVariant },
-            ]}
-          >
-            <Text variant="labelLarge">{section.title}</Text>
-            <Text variant="labelLarge">
+          <View style={styles.sectionHeader}>
+            <AppText variant="footnote" tone="secondary" weight="600" style={{ letterSpacing: 0.3 }}>
+              {section.title.toUpperCase()}
+            </AppText>
+            <AppText variant="footnote" tone="secondary" weight="600">
               {formatCurrency(section.total, settings.currency)}
-            </Text>
+            </AppText>
           </View>
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={{ opacity: 0.7 }}>No expenses match your filters.</Text>
+            <MaterialCommunityIcons name="magnify" size={30} color={p.tertiaryLabel} />
+            <AppText variant="subhead" tone="secondary">No expenses match your filters.</AppText>
           </View>
         }
-        renderItem={({ item }) => (
-          <ExpenseRow
-            item={item}
-            currency={settings.currency}
-            selected={selected.has(item.id)}
-            onPress={() => onItemPress(item)}
-            onLongPress={() => toggleSelect(item.id)}
-          />
-        )}
-      />
-
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        color={theme.colors.onPrimary}
-        onPress={() => router.push('/modal/add-expense')}
+        renderItem={({ item, index, section }) => {
+          const first = index === 0;
+          const last = index === section.data.length - 1;
+          return (
+            <View
+              style={[
+                styles.itemWrap,
+                { backgroundColor: p.groupedCard },
+                first && styles.itemFirst,
+                last && styles.itemLast,
+              ]}
+            >
+              <ExpenseRow
+                item={item}
+                currency={settings.currency}
+                selected={selected.has(item.id)}
+                onPress={() => onItemPress(item)}
+                onLongPress={() => toggleSelect(item.id)}
+              />
+              {!last ? <View style={[styles.sep, { backgroundColor: p.separator }]} /> : null}
+            </View>
+          );
+        }}
       />
     </View>
   );
 }
 
-function labelFor(r: DateRange) {
-  switch (r) {
-    case 'this_month':
-      return 'This month';
-    case 'last_month':
-      return 'Last month';
-    case 'last_3_months':
-      return 'Last 3 months';
-    case 'all':
-      return 'All time';
-  }
+function FilterChip({
+  label,
+  active,
+  icon,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  onPress: () => void;
+}) {
+  const { ios } = useAppTheme();
+  const p = ios.palette;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.chip,
+        { backgroundColor: active ? p.selection : p.fill },
+        pressed && { opacity: 0.6 },
+      ]}
+    >
+      <MaterialCommunityIcons name={icon} size={15} color={active ? p.tint : p.secondaryLabel} />
+      <AppText variant="footnote" weight={active ? '600' : '400'} color={active ? p.tint : p.label} numberOfLines={1}>
+        {label}
+      </AppText>
+      <MaterialCommunityIcons name="chevron-down" size={15} color={active ? p.tint : p.secondaryLabel} />
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  searchWrap: { padding: 12 },
-  filters: {
+  addBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  selectionBar: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  chip: { marginRight: 4, marginBottom: 4 },
+  controls: { paddingHorizontal: spacing.lg, gap: spacing.md, paddingBottom: spacing.md },
+  filterRow: { flexDirection: 'row', gap: spacing.sm },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+  },
+  listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxxl },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
-  sep: { height: StyleSheet.hairlineWidth, backgroundColor: '#0001', marginLeft: 68 },
-  empty: { padding: 32, alignItems: 'center' },
-  fab: { position: 'absolute', right: 16, bottom: 24 },
+  itemWrap: { overflow: 'hidden' },
+  itemFirst: { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
+  itemLast: { borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg },
+  sep: { height: StyleSheet.hairlineWidth, marginLeft: 64 },
+  empty: { paddingVertical: spacing.xxxl, alignItems: 'center', gap: spacing.sm },
 });

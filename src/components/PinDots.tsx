@@ -1,5 +1,5 @@
 import { View, StyleSheet } from 'react-native';
-import { useTheme } from 'react-native-paper';
+import { useAppTheme } from '@/theme';
 
 export function PinDots({
   length,
@@ -10,8 +10,10 @@ export function PinDots({
   filled: number;
   error?: boolean;
 }) {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const p = ios.palette;
   const dots = Array.from({ length }, (_, i) => i < filled);
+  const activeColor = error ? p.negative : p.label;
   return (
     <View style={styles.row}>
       {dots.map((on, i) => (
@@ -20,12 +22,8 @@ export function PinDots({
           style={[
             styles.dot,
             {
-              borderColor: error ? theme.colors.error : theme.colors.outline,
-              backgroundColor: on
-                ? error
-                  ? theme.colors.error
-                  : theme.colors.primary
-                : 'transparent',
+              borderColor: on ? activeColor : p.separator,
+              backgroundColor: on ? activeColor : 'transparent',
             },
           ]}
         />
@@ -35,6 +33,6 @@ export function PinDots({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', justifyContent: 'center', gap: 14, marginVertical: 24 },
-  dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
+  row: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginVertical: 28 },
+  dot: { width: 13, height: 13, borderRadius: 7, borderWidth: 1.5 },
 });

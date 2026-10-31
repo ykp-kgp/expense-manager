@@ -5,12 +5,13 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AppThemeProvider } from '@/theme';
+import { AppThemeProvider, useAppTheme } from '@/theme';
 import { DbProvider, useDb } from '@/lib/db-context';
 import { SettingsProvider } from '@/lib/settings-context';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { materializeRecurring } from '@/lib/recurring';
 import { ensureAndroidChannel } from '@/lib/notifications';
+import { PrivacyOverlay } from '@/components/PrivacyOverlay';
 
 export default function RootLayout() {
   return (
@@ -21,6 +22,7 @@ export default function RootLayout() {
             <AuthProvider>
               <AppThemeProvider>
                 <RootGate />
+                <PrivacyOverlay />
               </AppThemeProvider>
             </AuthProvider>
           </SettingsProvider>
@@ -31,6 +33,7 @@ export default function RootLayout() {
 }
 
 function RootGate() {
+  const theme = useAppTheme();
   const { ready: dbReady } = useDb();
   const { isReady, pinSet, unlocked } = useAuth();
   const router = useRouter();
@@ -76,7 +79,20 @@ function RootGate() {
   return (
     <>
       <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          headerStyle: { backgroundColor: theme.ios.palette.background },
+          headerShadowVisible: false,
+          headerTintColor: theme.ios.palette.tint,
+          headerTitleStyle: {
+            color: theme.ios.palette.label,
+            fontSize: 17,
+            fontWeight: '600',
+          },
+          contentStyle: { backgroundColor: theme.ios.palette.background },
+        }}
+      >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen

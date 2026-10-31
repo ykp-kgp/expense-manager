@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View, Alert } from 'react-native';
+import { View, StyleSheet, Alert } from 'react-native';
 import {
-  Text,
-  Card,
   Button,
   Dialog,
   Portal,
   TextInput,
-  useTheme,
   ActivityIndicator,
-  Banner,
 } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import {
   isDriveConnected,
@@ -21,9 +18,13 @@ import {
   getLastBackupAt,
 } from '@/lib/drive';
 import { useDb } from '@/lib/db-context';
+import { AppText, Screen, Card } from '@/components/ui';
+import { useAppTheme } from '@/theme';
+import { radius, spacing } from '@/theme/tokens';
 
 export default function BackupScreen() {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const p = ios.palette;
   const { bump } = useDb();
   const [connected, setConnected] = useState(false);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
@@ -45,8 +46,7 @@ export default function BackupScreen() {
     setBusy(true);
     setError(null);
     try {
-      const ok = await connectDrive();
-      if (ok) await refresh();
+      if (await connectDrive()) await refresh();
     } catch (e: any) {
       setError(e?.message ?? 'Failed to connect Drive.');
     } finally {
@@ -54,20 +54,13 @@ export default function BackupScreen() {
     }
   };
 
-  const handleDisconnect = async () => {
+  const handleDisconnect = () => {
     Alert.alert(
       'Disconnect Drive?',
-      'Your backup file in Drive will remain. You can delete it from Drive\'s app data manager if desired.',
+      "Your backup file in Drive will remain. You can delete it from Drive's app data manager if desired.",
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: async () => {
-            await disconnectDrive();
-            refresh();
-          },
-        },
+        { text: 'Disconnect', style: 'destructive', onPress: async () => { await disconnectDrive(); refresh(); } },
       ]
     );
   };
@@ -85,10 +78,7 @@ export default function BackupScreen() {
         bump();
         Alert.alert(
           'Restore complete',
-          `${r.expenseCount} expenses restored from backup taken ${format(
-            parseISO(r.exportedAt),
-            'd MMM yyyy, HH:mm'
-          )}.`
+          `${r.expenseCount} expenses restored from backup taken ${format(parseISO(r.exportedAt), 'd MMM yyyy, HH:mm')}.`
         );
       }
       setPinDialog(null);
@@ -101,88 +91,76 @@ export default function BackupScreen() {
   };
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: theme.colors.background }}
-      contentContainerStyle={styles.content}
-    >
-      <Banner
-        visible
-        actions={[]}
-        icon="shield-lock-outline"
-      >
-        Backups are end-to-end encrypted with a key derived from your PIN. Only
-        you can decrypt them. They are stored in a hidden app folder of your
-        own Google Drive.
-      </Banner>
+    <Screen scroll contentStyle={{ gap: spacing.lg }}>
+      <View style={[styles.banner, { backgroundColor: p.tint + '14' }]}>
+        <MaterialCommunityIcons name="shield-lock-outline" size={22} color={p.tint} />
+        <AppText variant="footnote" style={{ flex: 1 }} tone="secondary">
+          Backups are end-to-end encrypted with a key derived from your PIN. Only you can decrypt them. They are
+          stored in a hidden app folder of your own Google Drive.
+        </AppText>
+      </View>
 
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text variant="titleMedium">Google Drive</Text>
-          <Text style={{ opacity: 0.7, marginTop: 4 }}>
-            {connected ? 'Connected' : 'Not connected'}
-          </Text>
-          {lastBackup && (
-            <Text style={{ marginTop: 4 }}>
-              Last backup: {format(parseISO(lastBackup), 'd MMM yyyy, HH:mm')}
-            </Text>
-          )}
-
-          <View style={styles.row}>
-            {!connected ? (
-              <Button mode="contained" onPress={handleConnect} loading={busy} disabled={busy}>
-                Connect Google Drive
-              </Button>
-            ) : (
-              <>
-                <Button
-                  mode="contained"
-                  onPress={() => setPinDialog('backup')}
-                  disabled={busy}
-                  style={{ marginRight: 8 }}
-                >
-                  Backup now
-                </Button>
-                <Button
-                  mode="outlined"
-                  onPress={() => setPinDialog('restore')}
-                  disabled={busy}
-                >
-                  Restore
-                </Button>
-              </>
-            )}
+      <View style={{ gap: spacing.sm }}>
+        <AppText variant="footnote" tone="secondary" style={styles.groupTitle}>GOOGLE DRIVE</AppText>
+        <Card style={{ gap: spacing.md }}>
+          <View style={styles.statusRow}>
+            <View style={{ flex: 1 }}>
+              <AppText variant="body" weight="600">
+                {connected ? 'Connected' : 'Not connected'}
+              </AppText>
+              {lastBackup ? (
+                <AppText variant="footnote" tone="secondary">
+                  Last backup {format(parseISO(lastBackup), 'd MMM yyyy, HH:mm')}
+                </AppText>
+              ) : null}
+            </View>
+            <MaterialCommunityIcons
+              name={connected ? 'check-circle' : 'cloud-off-outline'}
+              size={22}
+              color={connected ? p.positive : p.tertiaryLabel}
+            />
           </View>
 
-          {connected && (
-            <Button mode="text" onPress={handleDisconnect} style={{ marginTop: 8 }}>
+          {!connected ? (
+            <Button mode="contained" onPress={handleConnect} loading={busy} disabled={busy} style={styles.btn}>
+              Connect Google Drive
+            </Button>
+          ) : (
+            <View style={styles.actions}>
+              <Button mode="contained" onPress={() => setPinDialog('backup')} disabled={busy} style={styles.flexBtn}>
+                Back up now
+              </Button>
+              <Button mode="outlined" onPress={() => setPinDialog('restore')} disabled={busy} style={styles.flexBtn}>
+                Restore
+              </Button>
+            </View>
+          )}
+          {connected ? (
+            <Button mode="text" textColor={p.negative} onPress={handleDisconnect}>
               Disconnect
             </Button>
-          )}
-          {error && (
-            <Text style={{ color: theme.colors.error, marginTop: 8 }}>{error}</Text>
-          )}
-        </Card.Content>
-      </Card>
+          ) : null}
+          {error ? (
+            <AppText variant="footnote" tone="negative">{error}</AppText>
+          ) : null}
+        </Card>
+      </View>
 
-      <Card style={styles.card}>
-        <Card.Title title="How backup works" />
-        <Card.Content>
-          <Text style={{ marginBottom: 8 }}>
-            1. App creates a snapshot of your expenses.
-          </Text>
-          <Text style={{ marginBottom: 8 }}>
-            2. The snapshot is encrypted with a key derived from your PIN.
-          </Text>
-          <Text style={{ marginBottom: 8 }}>
-            3. The encrypted file is uploaded to your Google Drive&apos;s
-            hidden app data folder.
-          </Text>
-          <Text>
-            To restore on a new device, install the app, set the SAME PIN, then
-            connect Drive and tap Restore.
-          </Text>
-        </Card.Content>
-      </Card>
+      <View style={{ gap: spacing.sm }}>
+        <AppText variant="footnote" tone="secondary" style={styles.groupTitle}>HOW BACKUP WORKS</AppText>
+        <Card style={{ gap: spacing.md }}>
+          <Step n="1" text="The app creates a snapshot of your expenses." />
+          <Step n="2" text="The snapshot is encrypted with a key derived from your PIN." />
+          <Step n="3" text="The encrypted file is uploaded to your Google Drive's hidden app data folder." />
+          <AppText variant="subhead" tone="secondary">
+            To restore on a new device, install the app, set the same PIN, then connect Drive and tap Restore.
+          </AppText>
+          <AppText variant="footnote" tone="secondary">
+            Tip: a 6-digit PIN makes your encrypted backup much harder to crack than a 4-digit one. If you forget
+            your PIN the backup cannot be recovered — that is what keeps it private.
+          </AppText>
+        </Card>
+      </View>
 
       <Portal>
         <Dialog
@@ -197,11 +175,11 @@ export default function BackupScreen() {
         >
           <Dialog.Title>Enter your PIN</Dialog.Title>
           <Dialog.Content>
-            <Text style={{ marginBottom: 12 }}>
+            <AppText variant="subhead" tone="secondary" style={{ marginBottom: spacing.md }}>
               {pinDialog === 'backup'
                 ? 'Your PIN encrypts the backup before it leaves your device.'
                 : 'Enter the PIN that was used when the backup was created.'}
-            </Text>
+            </AppText>
             <TextInput
               mode="outlined"
               keyboardType="number-pad"
@@ -211,27 +189,49 @@ export default function BackupScreen() {
               maxLength={6}
               autoFocus
             />
-            {busy && <ActivityIndicator style={{ marginTop: 12 }} />}
-            {error && (
-              <Text style={{ color: theme.colors.error, marginTop: 8 }}>{error}</Text>
-            )}
+            {busy ? <ActivityIndicator style={{ marginTop: spacing.md }} /> : null}
+            {error ? (
+              <AppText variant="footnote" tone="negative" style={{ marginTop: spacing.sm }}>{error}</AppText>
+            ) : null}
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setPinDialog(null)} disabled={busy}>
-              Cancel
-            </Button>
+            <Button onPress={() => setPinDialog(null)} disabled={busy}>Cancel</Button>
             <Button onPress={submitPin} disabled={busy || pinInput.length < 4}>
-              {pinDialog === 'backup' ? 'Backup' : 'Restore'}
+              {pinDialog === 'backup' ? 'Back up' : 'Restore'}
             </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
-    </ScrollView>
+    </Screen>
+  );
+}
+
+function Step({ n, text }: { n: string; text: string }) {
+  const { ios } = useAppTheme();
+  const p = ios.palette;
+  return (
+    <View style={styles.step}>
+      <View style={[styles.stepNum, { backgroundColor: p.fill }]}>
+        <AppText variant="footnote" weight="600" tone="tint">{n}</AppText>
+      </View>
+      <AppText variant="subhead" tone="secondary" style={{ flex: 1 }}>{text}</AppText>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 12, gap: 12, paddingBottom: 32 },
-  card: { borderRadius: 16 },
-  row: { flexDirection: 'row', alignItems: 'center', marginTop: 12, flexWrap: 'wrap' },
+  banner: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  groupTitle: { marginLeft: spacing.xs, letterSpacing: 0.5 },
+  statusRow: { flexDirection: 'row', alignItems: 'center' },
+  btn: { borderRadius: radius.md },
+  actions: { flexDirection: 'row', gap: spacing.sm },
+  flexBtn: { flex: 1, borderRadius: radius.md },
+  step: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
+  stepNum: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });

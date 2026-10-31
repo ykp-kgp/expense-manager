@@ -77,7 +77,12 @@ export async function listExpenses(filter: ExpenseFilter = {}): Promise<ExpenseW
     params.push(q, q);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const limitSql = filter.limit ? `LIMIT ${filter.limit}` : '';
+  // Coerce to a non-negative integer so the value can never carry SQL, even if
+  // a caller passes an unexpected type at runtime.
+  const safeLimit = Number.isFinite(filter.limit as number)
+    ? Math.max(0, Math.floor(filter.limit as number))
+    : 0;
+  const limitSql = safeLimit > 0 ? `LIMIT ${safeLimit}` : '';
   const rows = await sqlite.getAllAsync<any>(
     `SELECT e.*,
             c.name AS categoryName, c.icon AS categoryIcon, c.color AS categoryColor,

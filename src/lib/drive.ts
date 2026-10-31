@@ -34,7 +34,13 @@ export async function disconnectDrive() {
   const token = await SecureStore.getItemAsync(DRIVE_TOKEN_KEY);
   if (token) {
     try {
-      await fetch(`${discovery.revocationEndpoint}?token=${token}`, { method: 'POST' });
+      // Send the token in the request body, not the URL, so it is not captured
+      // in proxy/server logs or browser history.
+      await fetch(discovery.revocationEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token }).toString(),
+      });
     } catch {
       // ignore
     }
@@ -124,7 +130,8 @@ async function buildBackupPayload(): Promise<string> {
 export async function backupNow(pin: string): Promise<void> {
   const ok = await verifyPin(pin);
   if (!ok) throw new Error('Incorrect PIN.');
-  const salt = (await SecureStore.getItemAsync('em.pin_salt'))!;
+  const salt = await SecureStore.getItemAsync('em.pin_salt');
+  if (!salt) throw new Error('No PIN is set on this device.');
   const accessToken = await obtainAccessToken();
 
   const plain = await buildBackupPayload();
@@ -173,45 +180,67 @@ export async function restoreFromDrive(pin: string): Promise<BackupPreview> {
   );
   if (!res.ok) throw new Error(`Drive download failed: ${res.status}`);
   const encrypted = await res.text();
+
+  // decryptString throws DecryptionError on a wrong PIN or a tampered file,
+  // so we never reach the destructive DB write with unauthenticated data.
   const plain = decryptString(encrypted, pin);
-  const data = JSON.parse(plain) as {
-    exportedAt: string;
-    expenses: Array<Record<string, unknown>>;
-  };
+
+  let data: { exportedAt?: unknown; expenses?: unknown };
+  try {
+    data = JSON.parse(plain);
+  } catch {
+    throw new Error('Backup contents are not valid. Nothing was changed.');
+  }
+
+  // Validate the structure BEFORE deleting anything, so a malformed backup
+  // can never wipe the existing data.
+  if (!data || typeof data !== 'object' || !Array.isArray(data.expenses)) {
+    throw new Error('Backup does not contain any expenses. Nothing was changed.');
+  }
+  const rawExpenses = data.expenses as Array<Record<string, unknown>>;
+
+  const clean = rawExpenses.map((e, i) => {
+    const amount = Number(e.amount);
+    const categoryId = Number(e.categoryId);
+    const paymentMethodId = Number(e.paymentMethodId);
+    if (!Number.isFinite(amount) || !Number.isInteger(categoryId) || !Number.isInteger(paymentMethodId)) {
+      throw new Error(`Backup row ${i + 1} is malformed. Nothing was changed.`);
+    }
+    const created =
+      typeof e.createdAt === 'string'
+        ? new Date(e.createdAt).getTime()
+        : Number(e.createdAt) || Date.now();
+    const updated =
+      typeof e.updatedAt === 'string'
+        ? new Date(e.updatedAt).getTime()
+        : Number(e.updatedAt) || created;
+    return {
+      amount,
+      categoryId,
+      paymentMethodId,
+      date: typeof e.date === 'string' ? e.date : String(e.date ?? ''),
+      note: typeof e.note === 'string' ? e.note : null,
+      recurringId: typeof e.recurringId === 'number' ? e.recurringId : null,
+      created,
+      updated,
+    };
+  });
 
   const sqlite = getRawDb();
   await sqlite.withTransactionAsync(async () => {
     await sqlite.runAsync('DELETE FROM expenses');
-    for (const e of data.expenses ?? []) {
-      const created =
-        typeof e.createdAt === 'string'
-          ? new Date(e.createdAt).getTime()
-          : Number(e.createdAt) || Date.now();
-      const updated =
-        typeof e.updatedAt === 'string'
-          ? new Date(e.updatedAt).getTime()
-          : Number(e.updatedAt) || created;
+    for (const e of clean) {
       await sqlite.runAsync(
         `INSERT INTO expenses
           (amount, category_id, payment_method_id, date, note, attachment_path, recurring_id, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          Number(e.amount),
-          Number(e.categoryId),
-          Number(e.paymentMethodId),
-          String(e.date),
-          (e.note as string) ?? null,
-          null,
-          (e.recurringId as number) ?? null,
-          created,
-          updated,
-        ]
+        [e.amount, e.categoryId, e.paymentMethodId, e.date, e.note, null, e.recurringId, e.created, e.updated]
       );
     }
   });
 
   return {
-    exportedAt: data.exportedAt,
-    expenseCount: Array.isArray(data.expenses) ? data.expenses.length : 0,
+    exportedAt: typeof data.exportedAt === 'string' ? data.exportedAt : new Date().toISOString(),
+    expenseCount: clean.length,
   };
 }

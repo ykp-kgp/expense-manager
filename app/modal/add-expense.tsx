@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet, Image, Alert, Platform } from 'react-native';
-import {
-  Text,
-  Button,
-  TextInput,
-  IconButton,
-  useTheme,
-  Divider,
-} from 'react-native-paper';
+import { View, ScrollView, StyleSheet, Image, Alert, Platform, Pressable } from 'react-native';
+import { Button, TextInput } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -18,13 +12,11 @@ import { CategoryGrid } from '@/components/CategoryGrid';
 import { PaymentMethodChips } from '@/components/PaymentMethodChips';
 import { useDb } from '@/lib/db-context';
 import { useSettings } from '@/lib/settings-context';
-import {
-  createExpense,
-  deleteExpense,
-  getExpense,
-  updateExpense,
-} from '@/lib/queries';
+import { createExpense, deleteExpense, getExpense, updateExpense } from '@/lib/queries';
 import { CURRENCY_SYMBOLS, todayISO } from '@/lib/format';
+import { AppText } from '@/components/ui';
+import { useAppTheme } from '@/theme';
+import { radius, spacing } from '@/theme/tokens';
 
 const RECEIPTS_DIR = FileSystem.documentDirectory + 'receipts/';
 
@@ -34,7 +26,8 @@ async function ensureReceiptsDir() {
 }
 
 export default function AddExpenseScreen() {
-  const theme = useTheme();
+  const { ios } = useAppTheme();
+  const p = ios.palette;
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const editingId = params.id ? parseInt(params.id, 10) : null;
@@ -53,8 +46,7 @@ export default function AddExpenseScreen() {
 
   useEffect(() => {
     if (categoryId == null && categories.length) setCategoryId(categories[0].id);
-    if (paymentMethodId == null && paymentMethods.length)
-      setPaymentMethodId(paymentMethods[0].id);
+    if (paymentMethodId == null && paymentMethods.length) setPaymentMethodId(paymentMethods[0].id);
   }, [categories, paymentMethods, categoryId, paymentMethodId]);
 
   useEffect(() => {
@@ -84,10 +76,7 @@ export default function AddExpenseScreen() {
       Alert.alert('Permission required', 'Allow photo access to attach receipts.');
       return;
     }
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-    });
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
     if (res.canceled || !res.assets?.length) return;
     await ensureReceiptsDir();
     const src = res.assets[0].uri;
@@ -115,28 +104,17 @@ export default function AddExpenseScreen() {
     setBusy(true);
     try {
       const now = new Date();
-      if (editingId) {
-        await updateExpense(editingId, {
-          amount: numericAmount,
-          categoryId,
-          paymentMethodId,
-          date,
-          note: note || null,
-          attachmentPath: attachment,
-          updatedAt: now,
-        });
-      } else {
-        await createExpense({
-          amount: numericAmount,
-          categoryId,
-          paymentMethodId,
-          date,
-          note: note || null,
-          attachmentPath: attachment,
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
+      const payload = {
+        amount: numericAmount,
+        categoryId,
+        paymentMethodId,
+        date,
+        note: note || null,
+        attachmentPath: attachment,
+        updatedAt: now,
+      };
+      if (editingId) await updateExpense(editingId, payload);
+      else await createExpense({ ...payload, createdAt: now });
       bump();
       router.back();
     } finally {
@@ -161,108 +139,122 @@ export default function AddExpenseScreen() {
   };
 
   return (
-    <ScrollView style={{ backgroundColor: theme.colors.background }} contentContainerStyle={styles.container}>
-      <View style={styles.amountBox}>
-        <Text variant="titleMedium" style={{ opacity: 0.6 }}>
-          Amount
-        </Text>
-        <Text variant="displaySmall" style={{ fontWeight: '700' }}>
-          {symbol}
-          {amount || '0'}
-        </Text>
-      </View>
-      <AmountKeypad value={amount} onChange={setAmount} />
+    <View style={[styles.flex, { backgroundColor: p.background }]}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Amount */}
+        <View style={styles.amountBox}>
+          <AppText variant="footnote" tone="secondary" style={styles.eyebrow}>
+            AMOUNT
+          </AppText>
+          <AppText variant="largeTitle" weight="700" style={{ fontSize: 48, lineHeight: 56 }}>
+            {symbol}
+            {amount || '0'}
+          </AppText>
+        </View>
+        <AmountKeypad value={amount} onChange={setAmount} />
 
-      <Divider style={styles.divider} />
-      <Text variant="titleSmall" style={styles.section}>
-        Category
-      </Text>
-      <CategoryGrid
-        items={categories}
-        selectedId={categoryId}
-        onSelect={setCategoryId}
-      />
+        <Label>Category</Label>
+        <CategoryGrid items={categories} selectedId={categoryId} onSelect={setCategoryId} />
 
-      <Text variant="titleSmall" style={styles.section}>
-        Payment method
-      </Text>
-      <PaymentMethodChips
-        items={paymentMethods}
-        selectedId={paymentMethodId}
-        onSelect={setPaymentMethodId}
-      />
+        <Label>Payment method</Label>
+        <PaymentMethodChips items={paymentMethods} selectedId={paymentMethodId} onSelect={setPaymentMethodId} />
 
-      <View style={styles.row}>
-        <Button
-          mode="outlined"
-          icon="calendar"
-          onPress={() => setShowDate(true)}
-          style={{ flex: 1 }}
-        >
-          {format(parseISO(date), 'd MMM yyyy')}
-        </Button>
-      </View>
-      {showDate && (
-        <DateTimePicker
-          value={parseISO(date)}
-          mode="date"
-          maximumDate={new Date()}
-          onChange={(_, d) => {
-            setShowDate(Platform.OS === 'ios');
-            if (d) setDate(format(d, 'yyyy-MM-dd'));
-          }}
-        />
-      )}
+        <View style={styles.inset}>
+          <Pressable
+            onPress={() => setShowDate(true)}
+            style={[styles.dateRow, { backgroundColor: p.groupedCard }]}
+          >
+            <MaterialCommunityIcons name="calendar" size={20} color={p.tint} />
+            <AppText variant="body" style={{ flex: 1 }}>Date</AppText>
+            <AppText variant="body" tone="secondary">{format(parseISO(date), 'd MMM yyyy')}</AppText>
+          </Pressable>
+          {showDate ? (
+            <DateTimePicker
+              value={parseISO(date)}
+              mode="date"
+              maximumDate={new Date()}
+              onChange={(_, d) => {
+                setShowDate(Platform.OS === 'ios');
+                if (d) setDate(format(d, 'yyyy-MM-dd'));
+              }}
+            />
+          ) : null}
 
-      <TextInput
-        label="Note (optional)"
-        value={note}
-        onChangeText={setNote}
-        mode="outlined"
-        multiline
-        style={styles.input}
-      />
+          <TextInput
+            label="Note (optional)"
+            value={note}
+            onChangeText={setNote}
+            mode="outlined"
+            multiline
+            style={styles.input}
+          />
 
-      <View style={styles.row}>
-        <Button mode="outlined" icon="paperclip" onPress={pickImage} style={{ flex: 1 }}>
-          {attachment ? 'Change receipt' : 'Attach receipt'}
-        </Button>
-        {attachment && (
-          <IconButton icon="close" onPress={removeAttachment} />
-        )}
-      </View>
-      {attachment && (
-        <Image source={{ uri: attachment }} style={styles.preview} resizeMode="cover" />
-      )}
+          <Pressable
+            onPress={pickImage}
+            style={[styles.dateRow, { backgroundColor: p.groupedCard, marginTop: spacing.md }]}
+          >
+            <MaterialCommunityIcons name="paperclip" size={20} color={p.tint} />
+            <AppText variant="body" style={{ flex: 1 }}>
+              {attachment ? 'Change receipt' : 'Attach receipt'}
+            </AppText>
+            {attachment ? (
+              <Pressable onPress={removeAttachment} hitSlop={8}>
+                <MaterialCommunityIcons name="close-circle" size={20} color={p.tertiaryLabel} />
+              </Pressable>
+            ) : (
+              <MaterialCommunityIcons name="chevron-right" size={20} color={p.tertiaryLabel} />
+            )}
+          </Pressable>
+          {attachment ? (
+            <Image source={{ uri: attachment }} style={styles.preview} resizeMode="cover" />
+          ) : null}
 
-      <View style={styles.actions}>
-        {editingId ? (
-          <Button mode="text" textColor={theme.colors.error} onPress={remove}>
-            Delete
+          <Button
+            mode="contained"
+            onPress={save}
+            loading={busy}
+            disabled={busy}
+            style={styles.save}
+            contentStyle={styles.saveContent}
+          >
+            {editingId ? 'Update expense' : 'Save expense'}
           </Button>
-        ) : (
-          <View />
-        )}
-        <Button mode="contained" onPress={save} loading={busy} disabled={busy}>
-          {editingId ? 'Update' : 'Save'}
-        </Button>
-      </View>
-    </ScrollView>
+          {editingId ? (
+            <Button mode="text" textColor={p.negative} onPress={remove}>
+              Delete
+            </Button>
+          ) : null}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function Label({ children }: { children: string }) {
+  return (
+    <AppText variant="footnote" tone="secondary" style={styles.label}>
+      {children.toUpperCase()}
+    </AppText>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, gap: 8, paddingBottom: 32 },
-  amountBox: { alignItems: 'center', paddingVertical: 8 },
-  divider: { marginVertical: 12 },
-  section: { marginTop: 8, marginLeft: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
-  input: { marginTop: 12 },
-  preview: { width: '100%', height: 180, borderRadius: 12, marginTop: 8 },
-  actions: {
+  flex: { flex: 1 },
+  container: { paddingVertical: spacing.lg, paddingBottom: spacing.xxxl, gap: spacing.sm },
+  amountBox: { alignItems: 'center', paddingVertical: spacing.md },
+  eyebrow: { letterSpacing: 0.5, marginBottom: spacing.xs },
+  label: { marginTop: spacing.lg, marginBottom: spacing.sm, marginLeft: spacing.lg + spacing.xs, letterSpacing: 0.5 },
+  inset: { paddingHorizontal: spacing.lg },
+  dateRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    minHeight: 50,
+    borderRadius: radius.md,
   },
+  input: { marginTop: spacing.md },
+  preview: { width: '100%', height: 180, borderRadius: radius.lg, marginTop: spacing.md },
+  save: { marginTop: spacing.xl, borderRadius: radius.md },
+  saveContent: { paddingVertical: spacing.xs },
 });

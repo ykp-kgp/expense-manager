@@ -5,8 +5,14 @@ import { listExpenses } from './queries';
 
 function csvEscape(value: string | number | null | undefined): string {
   if (value == null) return '';
-  const s = String(value);
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  let s = String(value);
+  // Neutralize CSV/spreadsheet formula injection (CWE-1236): a cell starting
+  // with = + - @ or a control char can be executed as a formula by Excel /
+  // Google Sheets / LibreOffice. Prefix a single quote so it renders as text.
+  if (/^[=+\-@\t\r]/.test(s)) {
+    s = `'${s}`;
+  }
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
 

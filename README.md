@@ -21,8 +21,22 @@ A privacy-first, offline-only Android expense tracker built with React Native + 
 
 All data lives in app-private SQLite storage on your device. Nothing is collected
 or transmitted to a developer server. The optional Google Drive backup is
-encrypted with a key derived from your PIN before it leaves the device, and is
-stored in a hidden folder of your own Drive.
+**authenticated-encrypted** (AES-256 + HMAC-SHA256) with a key derived from your
+PIN before it leaves the device, and is stored in a hidden `appDataFolder` of
+your own Drive.
+
+> **Note on data at rest:** the PIN gates the app UI; it does not (yet) encrypt
+> the on-device database itself. On a rooted/jailbroken or physically-extracted
+> device the local data is readable. Encrypting the database with SQLCipher is
+> tracked on the [roadmap](docs/MONETIZATION.md#future-roadmap) and in
+> [SECURITY.md](SECURITY.md). Choose a 6-digit PIN for stronger backups.
+
+## Security & documentation
+
+- [SECURITY.md](SECURITY.md) — threat model, audit findings & fixes, hardening backlog
+- [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) — pre-launch checklist for 10k+ users
+- [docs/SCALING.md](docs/SCALING.md) — how a local-first app scales (and an optional sync backend)
+- [docs/MONETIZATION.md](docs/MONETIZATION.md) — revenue models and the feature roadmap
 
 ## Stack
 
@@ -32,7 +46,7 @@ stored in a hidden folder of your own Drive.
 - **UI:** react-native-paper (Material 3) + @pchmn/expo-material3-theme
 - **DB:** expo-sqlite + drizzle-orm
 - **Charts:** react-native-gifted-charts
-- **Crypto:** expo-crypto + crypto-js (PBKDF2-SHA256, AES)
+- **Crypto:** expo-crypto + crypto-js (PBKDF2-SHA256, AES-256-CBC + HMAC-SHA256 encrypt-then-MAC)
 - **Auth:** expo-secure-store + expo-local-authentication
 
 ## Project layout
@@ -121,7 +135,10 @@ without it.
   content", purpose: "App functionality / Account management", optional, user
   initiated, not collected by the developer.
 - **Encryption in transit:** Yes (HTTPS to Google Drive).
-- **Encryption at rest:** Yes (AES via PBKDF2 from the user's PIN).
+- **Encryption at rest:** The **Drive backup file** is encrypted client-side
+  (AES-256 + HMAC-SHA256, key derived from the user's PIN). The **on-device
+  database is not yet encrypted at rest** — do not claim otherwise on the Data
+  Safety form until SQLCipher lands (see [SECURITY.md](SECURITY.md)).
 - **Data deletion:** Disconnect Drive in Settings; delete the file from
   Drive's manage-app-data screen.
 
