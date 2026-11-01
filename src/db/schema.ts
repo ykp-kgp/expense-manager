@@ -1,3 +1,8 @@
+// IMPORTANT: This Drizzle schema is the typed mirror of the raw CREATE TABLE
+// statements in `runMigrations` (./index.ts). The two are maintained by hand
+// and MUST stay in sync — any column/table change here needs a matching,
+// versioned migration step there (and vice versa). Indexes live only in the
+// migration DDL.
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 
 export const categories = sqliteTable('categories', {

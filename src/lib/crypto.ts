@@ -124,7 +124,7 @@ export function decryptString(payload: string, secret: string): string {
       macKey
     ).toString(CryptoJS.enc.Hex);
     // Verify integrity/authenticity BEFORE attempting to decrypt.
-    if (!timingSafeEqualHex(expectedMac, obj.mac)) {
+    if (!timingSafeEqual(expectedMac, obj.mac)) {
       throw new DecryptionError();
     }
     const iv = CryptoJS.enc.Hex.parse(obj.iv);
@@ -155,8 +155,13 @@ function toUtf8OrThrow(word: CryptoJS.lib.WordArray): string {
   return text;
 }
 
-/** Constant-time comparison of two equal-length hex strings. */
-function timingSafeEqualHex(a: string, b: string): boolean {
+/**
+ * Constant-time comparison of two strings. Returns false immediately on a
+ * length mismatch; otherwise compares every character so the time taken does
+ * not reveal how many leading characters matched. Used for hashes/MACs (hex),
+ * so per-char comparison is sufficient.
+ */
+export function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) {
