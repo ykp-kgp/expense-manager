@@ -25,6 +25,14 @@ function advance(dateStr: string, frequency: string, interval: number): string {
   return format(next, 'yyyy-MM-dd');
 }
 
+/**
+ * Safety ceiling on how many occurrences a single rule may generate in one
+ * pass. Without this, a daily rule whose nextRunDate is far in the past (e.g.
+ * restored from an old backup) would insert thousands of rows and block the
+ * UI. Any remaining catch-up happens on the next call.
+ */
+const MAX_OCCURRENCES_PER_RULE = 400;
+
 export async function materializeRecurring(): Promise<number> {
   const db = getDb();
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -39,7 +47,11 @@ export async function materializeRecurring(): Promise<number> {
 
   for (const rule of rules) {
     let nextRun = rule.nextRunDate;
-    while (parseISO(nextRun) <= todayDate) {
+    let producedForRule = 0;
+    while (
+      parseISO(nextRun) <= todayDate &&
+      producedForRule < MAX_OCCURRENCES_PER_RULE
+    ) {
       if (rule.endDate && isAfter(parseISO(nextRun), parseISO(rule.endDate))) {
         break;
       }
@@ -56,6 +68,7 @@ export async function materializeRecurring(): Promise<number> {
         updatedAt: now,
       });
       inserted += 1;
+      producedForRule += 1;
       nextRun = advance(nextRun, rule.frequency, rule.intervalCount);
     }
 

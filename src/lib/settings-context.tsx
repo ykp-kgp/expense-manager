@@ -103,12 +103,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 export function useSettings(): Ctx {
   const ctx = useContext(SettingsContext);
   if (!ctx) {
-    return {
-      settings: DEFAULT_SETTINGS,
-      ready: false,
-      update: async () => undefined,
-      updateMany: async () => undefined,
-    };
+    throw new Error('useSettings must be used within a <SettingsProvider>.');
   }
   return ctx;
 }

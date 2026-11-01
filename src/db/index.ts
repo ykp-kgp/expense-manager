@@ -34,6 +34,13 @@ export async function initDb() {
   return _db;
 }
 
+/**
+ * Applies forward-only, versioned migrations. The CREATE TABLE statements here
+ * are the hand-maintained counterpart to the Drizzle definitions in
+ * `./schema.ts` — keep both in sync. To change the schema, add a new
+ * `if (currentVersion < N)` block and bump {@link SCHEMA_VERSION}; never edit a
+ * shipped block in place.
+ */
 async function runMigrations(sqlite: SQLite.SQLiteDatabase) {
   await sqlite.execAsync(`
     CREATE TABLE IF NOT EXISTS schema_meta (

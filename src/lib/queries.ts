@@ -11,6 +11,49 @@ export type ExpenseWithRefs = Expense & {
   paymentMethodIcon: string;
 };
 
+/**
+ * Shape of a row returned by the expense JOIN query below: expense columns in
+ * their raw snake_case form, plus the aliased camelCase reference columns.
+ */
+type ExpenseJoinRow = {
+  id: number;
+  amount: number;
+  category_id: number;
+  payment_method_id: number;
+  date: string;
+  note: string | null;
+  attachment_path: string | null;
+  recurring_id: number | null;
+  created_at: number;
+  updated_at: number;
+  categoryName: string;
+  categoryIcon: string;
+  categoryColor: string;
+  paymentMethodName: string;
+  paymentMethodIcon: string;
+};
+
+/** Maps a raw JOIN row into the camelCase, typed {@link ExpenseWithRefs}. */
+function mapExpenseRow(r: ExpenseJoinRow): ExpenseWithRefs {
+  return {
+    id: r.id,
+    amount: r.amount,
+    categoryId: r.category_id,
+    paymentMethodId: r.payment_method_id,
+    date: r.date,
+    note: r.note,
+    attachmentPath: r.attachment_path,
+    recurringId: r.recurring_id,
+    createdAt: new Date(r.created_at),
+    updatedAt: new Date(r.updated_at),
+    categoryName: r.categoryName,
+    categoryIcon: r.categoryIcon,
+    categoryColor: r.categoryColor,
+    paymentMethodName: r.paymentMethodName,
+    paymentMethodIcon: r.paymentMethodIcon,
+  };
+}
+
 export async function listCategories() {
   const db = getDb();
   return db.select().from(schema.categories).orderBy(schema.categories.sortOrder);
@@ -83,7 +126,7 @@ export async function listExpenses(filter: ExpenseFilter = {}): Promise<ExpenseW
     ? Math.max(0, Math.floor(filter.limit as number))
     : 0;
   const limitSql = safeLimit > 0 ? `LIMIT ${safeLimit}` : '';
-  const rows = await sqlite.getAllAsync<any>(
+  const rows = await sqlite.getAllAsync<ExpenseJoinRow>(
     `SELECT e.*,
             c.name AS categoryName, c.icon AS categoryIcon, c.color AS categoryColor,
             p.name AS paymentMethodName, p.icon AS paymentMethodIcon
@@ -95,23 +138,7 @@ export async function listExpenses(filter: ExpenseFilter = {}): Promise<ExpenseW
      ${limitSql}`,
     params
   );
-  return rows.map((r) => ({
-    id: r.id,
-    amount: r.amount,
-    categoryId: r.category_id,
-    paymentMethodId: r.payment_method_id,
-    date: r.date,
-    note: r.note,
-    attachmentPath: r.attachment_path,
-    recurringId: r.recurring_id,
-    createdAt: new Date(r.created_at),
-    updatedAt: new Date(r.updated_at),
-    categoryName: r.categoryName,
-    categoryIcon: r.categoryIcon,
-    categoryColor: r.categoryColor,
-    paymentMethodName: r.paymentMethodName,
-    paymentMethodIcon: r.paymentMethodIcon,
-  }));
+  return rows.map(mapExpenseRow);
 }
 
 export async function monthTotal(month: Date | string = new Date()): Promise<number> {
@@ -145,7 +172,7 @@ export async function totalsByCategoryForMonth(
   const start = format(startOfMonth(m), 'yyyy-MM-dd');
   const end = format(endOfMonth(m), 'yyyy-MM-dd');
   const sqlite = getRawDb();
-  const rows = await sqlite.getAllAsync<any>(
+  const rows = await sqlite.getAllAsync<CategoryTotal & { total: number | null }>(
     `SELECT c.id AS categoryId, c.name AS name, c.color AS color, c.icon AS icon,
             COALESCE(SUM(e.amount), 0) AS total
      FROM categories c
@@ -219,7 +246,7 @@ export async function budgetProgressForMonth(month: string): Promise<BudgetProgr
   const start = month + '-01';
   const m = parseISO(start);
   const end = format(endOfMonth(m), 'yyyy-MM-dd');
-  const rows = await sqlite.getAllAsync<any>(
+  const rows = await sqlite.getAllAsync<BudgetProgress>(
     `SELECT b.id, b.category_id AS categoryId, b.amount,
             c.name AS categoryName, c.color AS categoryColor, c.icon AS categoryIcon,
             COALESCE((
@@ -246,9 +273,32 @@ export async function budgetProgressForMonth(month: string): Promise<BudgetProgr
 
 // ===== Recurring =====
 
-export async function listRecurringRules() {
+/**
+ * A recurring rule joined with its category/payment method, in the raw
+ * snake_case form the recurring screens consume directly.
+ */
+export type RecurringRuleRow = {
+  id: number;
+  amount: number;
+  category_id: number;
+  payment_method_id: number;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  interval_count: number;
+  start_date: string;
+  end_date: string | null;
+  next_run_date: string;
+  note: string | null;
+  active: number;
+  created_at: number;
+  categoryName: string;
+  categoryIcon: string;
+  categoryColor: string;
+  paymentMethodName: string;
+};
+
+export async function listRecurringRules(): Promise<RecurringRuleRow[]> {
   const sqlite = getRawDb();
-  const rows = await sqlite.getAllAsync<any>(
+  return sqlite.getAllAsync<RecurringRuleRow>(
     `SELECT r.*, c.name AS categoryName, c.icon AS categoryIcon, c.color AS categoryColor,
             p.name AS paymentMethodName
      FROM recurring_rules r
@@ -256,7 +306,6 @@ export async function listRecurringRules() {
      JOIN payment_methods p ON p.id = r.payment_method_id
      ORDER BY r.active DESC, r.next_run_date ASC`
   );
-  return rows;
 }
 
 export async function createRecurringRule(input: NewRecurringRule) {
@@ -275,4 +324,24 @@ export async function updateRecurringRule(id: number, input: Partial<NewRecurrin
 export async function deleteRecurringRule(id: number) {
   const db = getDb();
   return db.delete(schema.recurringRules).where(eq(schema.recurringRules.id, id));
+}
+
+// ===== Full-dataset readers (for backup/export) =====
+
+/** All expense rows, unjoined, for serialization. */
+export async function listAllExpenses(): Promise<Expense[]> {
+  const db = getDb();
+  return db.select().from(schema.expenses).orderBy(schema.expenses.id);
+}
+
+/** All budgets across every month. */
+export async function listAllBudgets() {
+  const db = getDb();
+  return db.select().from(schema.budgets).orderBy(schema.budgets.id);
+}
+
+/** All recurring rules (active and inactive), unjoined. */
+export async function listAllRecurringRules() {
+  const db = getDb();
+  return db.select().from(schema.recurringRules).orderBy(schema.recurringRules.id);
 }

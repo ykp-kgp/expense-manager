@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { generateSalt, hashPin } from './crypto';
+import { generateSalt, hashPin, timingSafeEqual } from './crypto';
 
 const KEY_PIN_HASH = 'em.pin_hash';
 const KEY_PIN_SALT = 'em.pin_salt';
@@ -184,13 +184,4 @@ export async function authenticateBiometric(): Promise<boolean> {
 export async function getPinForBackup(): Promise<{ salt: string } | null> {
   const salt = await SecureStore.getItemAsync(KEY_PIN_SALT);
   return salt ? { salt } : null;
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
 }

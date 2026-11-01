@@ -58,14 +58,7 @@ export function DbProvider({ children }: { children: ReactNode }) {
 export function useDb(): Ctx {
   const ctx = useContext(DbContext);
   if (!ctx) {
-    return {
-      ready: false,
-      categories: [],
-      paymentMethods: [],
-      refresh: async () => undefined,
-      bump: () => undefined,
-      version: 0,
-    };
+    throw new Error('useDb must be used within a <DbProvider>.');
   }
   return ctx;
 }
